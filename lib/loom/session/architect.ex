@@ -688,12 +688,15 @@ defmodule Loom.Session.Architect do
 
   defp atomize_keys(map) when is_map(map) do
     Map.new(map, fn
-      {k, v} when is_binary(k) -> {String.to_existing_atom(k), v}
-      {k, v} -> {k, v}
+      {k, v} when is_binary(k) -> {String.to_existing_atom(k), atomize_keys(v)}
+      {k, v} -> {k, atomize_keys(v)}
     end)
   rescue
     ArgumentError -> map
   end
+
+  defp atomize_keys(list) when is_list(list), do: Enum.map(list, &atomize_keys/1)
+  defp atomize_keys(value), do: value
 
   defp parse_model(model_string) do
     case String.split(model_string, ":", parts: 2) do

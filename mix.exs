@@ -13,7 +13,8 @@ defmodule Loom.MixProject do
       deps: deps(),
       escript: escript(),
       releases: releases(),
-      elixirc_paths: elixirc_paths(Mix.env())
+      elixirc_paths: elixirc_paths(Mix.env()),
+      listeners: [Phoenix.CodeReloader]
     ]
   end
 

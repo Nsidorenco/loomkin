@@ -60,14 +60,20 @@ end
 │  │  └── Permission Manager (per-tool approval)        │  │
 │  └────────────────────────────────────────────────────┘  │
 ├──────────────────────────────────────────────────────────┤
-│  Tool Layer (12 Jido Actions)                            │
+│  Tool Layer (27 Jido Actions)                            │
 │  ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌──────────────┐   │
 │  │FileRead │ │FileWrite│ │FileEdit │ │ FileSearch   │   │
 │  ├─────────┤ ├─────────┤ ├─────────┤ ├──────────────┤   │
 │  │  Shell  │ │   Git   │ │SubAgent │ │ContentSearch │   │
 │  ├─────────┤ ├─────────┤ ├─────────┤ ├──────────────┤   │
 │  │DecisionLog│DecisionQuery│DirList │ │LspDiagnostics│   │
-│  └─────────┘ └─────────┘ └────────┘ └──────────────┘   │
+│  ├─────────┤ ├─────────┤ ├─────────┤ ├──────────────┤   │
+│  │TeamSpawn│ │TeamAssign│ │TeamDiss.│ │TeamProgress  │   │
+│  ├─────────┤ ├─────────┤ ├─────────┤ ├──────────────┤   │
+│  │PeerMsg  │ │PeerDisc.│ │PeerReview│ │PeerClaimRgn │   │
+│  ├─────────┤ ├─────────┤ ├─────────┤ ├──────────────┤   │
+│  │PeerTask │ │PeerAsk  │ │PeerAnswer│ │CtxOffload   │   │
+│  └─────────┘ └─────────┘ └─────────┘ └──────────────┘   │
 ├──────────────────────────────────────────────────────────┤
 │  Intelligence Layer                                      │
 │  ┌──────────────┐ ┌──────────────┐ ┌─────────────────┐  │
@@ -128,7 +134,7 @@ The Jido ecosystem saves thousands of lines of code and provides battle-tested i
 - **Interactive CLI** — REPL-style interface with streaming output, colored diffs, markdown rendering
 - **Phoenix LiveView web UI** — real-time streaming chat, file tree browser, unified diff viewer, interactive SVG decision graph, model selector, session switcher, tool permission modal, terminal output viewer — all without writing JavaScript
 - **PubSub real-time events** — session status, new messages, tool execution start/complete broadcast over Phoenix PubSub to all connected clients
-- **12 built-in tools** — file read/write/edit, glob search, regex search, directory listing, shell execution, git operations, LSP diagnostics, decision logging/querying, sub-agent search
+- **27 built-in tools** — file read/write/edit, glob search, regex search, directory listing, shell execution, git operations, LSP diagnostics, decision logging/querying, sub-agent search, team management (spawn/assign/dissolve/progress), peer communication (message/discovery/review/claim region/create task/ask/answer questions), context offload/retrieval
 - **Multi-provider LLM support** — Anthropic, OpenAI, Google, Groq, xAI, and more via req_llm
 - **Decision graph** — persistent reasoning memory with 7 node types and typed relationships, with interactive SVG visualization in the web UI
 - **Token-aware context window** — automatic budget allocation across system prompt, decision context, repo map, conversation history, and tool definitions
@@ -140,7 +146,7 @@ The Jido ecosystem saves thousands of lines of code and provides battle-tested i
 
 ### Production Polish (Phase 4)
 
-- **MCP server** — expose all 12 Loom tools to VS Code, Cursor, Zed, and other MCP-capable editors via [jido_mcp](https://github.com/agentjido/jido_mcp)
+- **MCP server** — expose Loom tools to VS Code, Cursor, Zed, and other MCP-capable editors via [jido_mcp](https://github.com/agentjido/jido_mcp)
 - **MCP client** — connect to external MCP servers (Tidewave, HexDocs, etc.), auto-discover tools, and make them available to the agent alongside built-in tools
 - **LSP client** — JSON-RPC stdio client that connects to language servers (ElixirLS, next-ls) and surfaces compiler errors/warnings via the `lsp_diagnostics` tool
 - **Tree-sitter repo map** — Port-based tree-sitter integration with enhanced regex fallback. Extracts 15+ symbol types across 7 languages (Elixir, JS/TS, Python, Ruby, Go, Rust) with ETS caching
@@ -149,15 +155,19 @@ The Jido ecosystem saves thousands of lines of code and provides battle-tested i
 - **Telemetry + cost dashboard** — full instrumentation across LLM calls, tool execution, and message persistence. ETS-backed real-time metrics. LiveView dashboard at `/dashboard` with per-session costs, model usage breakdown, and tool execution frequency
 - **Single binary packaging** — [Burrito](https://github.com/burrito-elixir/burrito) wraps the BEAM into a self-extracting binary for macOS (aarch64/x86_64) and Linux (x86_64/aarch64). Auto-migrates on startup, stores data at `~/.loom/`
 
-### Agent Teams (Phase 5 — Active Development)
+### Agent Teams (Phase 5 — Core Complete, Hardening In Progress)
 
 - **OTP-native agent teams** — each agent is a GenServer under a DynamicSupervisor. Agents communicate through Phoenix PubSub in real-time — direct messages, team-wide broadcasts, context updates. No files, no polling, sub-millisecond latency.
-- **Zero-loss context mesh** — agents offload context to lightweight Keeper processes instead of summarizing it away. Nothing is ever destroyed — any agent can retrieve the full conversation from any other agent's history.
+- **Zero-loss context mesh** — agents offload context to lightweight Keeper processes instead of summarizing it away. Nothing is ever destroyed — any agent can retrieve the full conversation from any other agent's history. Smart retrieval uses cheap LLM calls to semantically search keeper contents, not just dump raw chunks.
 - **Role-based agents** — lead, researcher, coder, reviewer, tester. Each role has scoped tools and a tailored system prompt, but all use the same user-configured model. The swarm's collective intelligence compensates for individual capability.
 - **Region-level file locking** — multiple agents can safely edit the same file by claiming specific line ranges or symbols. Intent broadcasting lets peers coordinate before editing.
 - **Peer review protocol** — agents request code reviews from each other. Critical paths can require review before edits are applied.
+- **Peer communication** — agents ask each other questions, forward queries to specialists, and share discoveries proactively. Context-aware behavior means agents broadcast findings to teammates automatically.
 - **Task coordination** — agents create tasks, propose plan revisions, and discover work that needs doing. Plans evolve as the team learns.
-- **Per-team budget tracking** — token bucket rate limiting per provider, per-team and per-agent spend tracking with configurable limits.
+- **Per-team budget tracking** — token bucket rate limiting per provider, per-team and per-agent spend tracking with configurable limits. Real-time cost dashboard per team.
+- **Team orchestration dashboard** — LiveView team management UI with real-time agent status, task progress, activity feed, and cost tracking. Spawn controls, team switcher, and per-agent visibility.
+- **Response streaming** — real-time streaming from team agents to the web UI. Architect mode shows step-by-step progress. Agent activity feed streams tool execution and discoveries as they happen.
+- **Permission system** — complete permission flow for team operations with approval modals, architect permission checks, and configurable auto-approve for team agents.
 - **Async agent loops** — LLM calls run as `Task.async`, so agents stay responsive to messages even while waiting for model responses. Urgent messages (budget exceeded, file conflicts) can interrupt in-flight work.
 
 ---
@@ -195,7 +205,7 @@ This isn't a roadmap — the OTP infrastructure, agent communication, task coord
 ### Install
 
 ```bash
-git clone https://github.com/yourusername/loom.git
+git clone https://github.com/bleuropa/loom.git
 cd loom
 
 # Install deps and set up the database
@@ -251,6 +261,15 @@ servers = [
 
 [repo]
 watch_enabled = true                       # auto-refresh index on file changes
+
+[teams]
+enabled = true
+max_agents_per_team = 10
+max_concurrent_teams = 3
+
+[teams.budget]
+max_per_team_usd = 5.00
+max_per_agent_usd = 1.00
 ```
 
 ### Run
@@ -339,7 +358,18 @@ loom/
 │   │   │   ├── context_offload.ex  # Topic boundary detection + offloading logic
 │   │   │   ├── context_retrieval.ex # Cross-agent context discovery + retrieval
 │   │   │   ├── tasks.ex            # Task CRUD + scheduling
-│   │   │   └── model_router.ex     # Model selection + opt-in escalation
+│   │   │   ├── model_router.ex     # Model selection + opt-in escalation
+│   │   │   ├── cost_tracker.ex     # Per-team/per-agent cost accounting
+│   │   │   ├── query_router.ex     # Cross-agent question routing
+│   │   │   ├── table_registry.ex   # ETS table lifecycle management
+│   │   │   ├── templates.ex        # Team composition templates
+│   │   │   ├── pricing.ex          # Model cost lookups
+│   │   │   ├── migration.ex        # Team data migrations
+│   │   │   ├── debate.ex           # Multi-agent debate protocol
+│   │   │   ├── pair_mode.ex        # Coder + reviewer pair programming
+│   │   │   ├── learning.ex         # Team pattern learning
+│   │   │   ├── cluster.ex          # Distributed team support
+│   │   │   └── distributed.ex      # Cross-node agent communication
 │   │   ├── tools/                  # Jido.Action tool modules
 │   │   │   ├── registry.ex         # Tool discovery + Jido.Exec dispatch
 │   │   │   ├── file_read.ex        # Core tools (12)
@@ -354,15 +384,21 @@ loom/
 │   │   │   ├── decision_log.ex
 │   │   │   ├── decision_query.ex
 │   │   │   ├── sub_agent.ex
-│   │   │   ├── team_spawn.ex       # Team lead tools
+│   │   │   ├── team_spawn.ex       # Team lead tools (4)
 │   │   │   ├── team_assign.ex
 │   │   │   ├── team_dissolve.ex
 │   │   │   ├── team_progress.ex
-│   │   │   ├── peer_message.ex     # Peer communication tools
+│   │   │   ├── peer_message.ex     # Peer communication tools (9)
 │   │   │   ├── peer_discovery.ex
 │   │   │   ├── peer_review.ex
 │   │   │   ├── peer_claim_region.ex
-│   │   │   └── peer_create_task.ex
+│   │   │   ├── peer_create_task.ex
+│   │   │   ├── peer_ask_question.ex
+│   │   │   ├── peer_answer_question.ex
+│   │   │   ├── peer_forward_question.ex
+│   │   │   ├── peer_change_role.ex
+│   │   │   ├── context_offload.ex  # Context mesh tools (2)
+│   │   │   └── context_retrieve.ex
 │   │   ├── decisions/              # Deciduous-inspired decision graph
 │   │   │   ├── graph.ex            # CRUD + queries
 │   │   │   ├── pulse.ex            # Health reports
@@ -410,7 +446,10 @@ loom/
 │   │       ├── session_switcher_component.ex # Session management
 │   │       ├── permission_component.ex   # Tool approval modal
 │   │       ├── terminal_component.ex     # Shell output renderer
-│   │       └── cost_dashboard_live.ex    # Telemetry + cost dashboard
+│   │       ├── cost_dashboard_live.ex    # Telemetry + cost dashboard
+│   │       ├── team_dashboard_component.ex # Team orchestration UI
+│   │       ├── team_activity_component.ex  # Real-time agent activity feed
+│   │       └── team_cost_component.ex    # Per-team budget + spend tracking
 │   └── loom_cli/                   # CLI interface
 │       ├── main.ex                 # Escript entry point
 │       ├── interactive.ex          # REPL loop
@@ -420,12 +459,12 @@ loom/
 │   ├── css/app.css                 # Tailwind dark theme
 │   └── tailwind.config.js          # Tailwind configuration
 ├── priv/repo/migrations/           # SQLite migrations
-├── test/                           # 335 tests across 40 files
+├── test/                           # 800+ tests across 77 files
 ├── config/                         # Dev/test/prod/runtime config
 └── docs/                           # Architecture + migration docs
 ```
 
-**~100 source files. ~15,000 LOC application code. ~6,000 LOC tests.**
+**~117 source files. ~19,000 LOC application code. ~11,000 LOC tests.**
 
 ---
 

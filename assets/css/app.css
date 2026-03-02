@@ -304,3 +304,86 @@ body {
 .chat-markdown tr:hover td {
   background: rgba(139, 92, 246, 0.03);
 }
+
+/* ══════════════════════════════════════════
+   Mission Control Animations
+   ══════════════════════════════════════════ */
+
+/* ── Mode Transition (panel slide-in/out) ── */
+.mc-panel-enter {
+  animation: slideInLeft 0.3s ease-out;
+}
+.mc-panel-exit {
+  animation: slideOutLeft 0.3s ease-in;
+}
+@keyframes slideInLeft {
+  from { transform: translateX(-100%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+@keyframes slideOutLeft {
+  from { transform: translateX(0); opacity: 1; }
+  to { transform: translateX(-100%); opacity: 0; }
+}
+
+/* ── Activity Feed Event Entrance ── */
+.activity-event-enter {
+  animation: fadeInUp 0.2s ease-out;
+}
+
+/* ── Streaming Card (pulsing border + typing cursor) ── */
+.streaming-card {
+  border-color: rgba(139, 92, 246, 0.5);
+  animation: pulse-border 2s ease-in-out infinite;
+}
+@keyframes pulse-border {
+  0%, 100% { border-color: rgba(139, 92, 246, 0.3); }
+  50% { border-color: rgba(139, 92, 246, 0.7); }
+}
+
+.streaming-cursor::after {
+  content: "\2588";
+  animation: blink-cursor 0.8s step-end infinite;
+  color: #a78bfa;
+}
+@keyframes blink-cursor {
+  50% { opacity: 0; }
+}
+
+/* ── Agent Status Dots ── */
+.agent-dot-working {
+  animation: pulse-dot 1.5s ease-in-out infinite;
+}
+@keyframes pulse-dot {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(74, 222, 128, 0.7); }
+  50% { box-shadow: 0 0 0 4px rgba(74, 222, 128, 0); }
+}
+
+.agent-dot-error {
+  animation: flash-dot 0.5s ease-in-out 3;
+}
+@keyframes flash-dot {
+  50% { opacity: 0.3; }
+}
+
+.agent-dot-thinking {
+  animation: pulse-soft 2s ease-in-out infinite;
+}
+
+/* ── Inspector Collapse Transition ── */
+.inspector-panel {
+  transition: width 0.3s ease, opacity 0.2s ease;
+}
+.inspector-collapsed {
+  width: 2.5rem;
+  overflow: hidden;
+}
+
+/* ── Event Card Type Borders ── */
+.event-card-tool { border-left: 2px solid #818cf8; }
+.event-card-message { border-left: 2px solid #9ca3af; }
+.event-card-task { border-left: 2px solid #22d3ee; }
+.event-card-discovery { border-left: 2px solid #fbbf24; }
+.event-card-error { border-left: 2px solid #f87171; }
+.event-card-spawn { border-left: 2px solid #4ade80; }
+.event-card-context { border-left: 2px solid #a78bfa; }
+.event-card-streaming { border-left: 2px solid #818cf8; animation: pulse-border 2s infinite; }

@@ -143,6 +143,51 @@ Hooks.CopyToClipboard = {
   }
 }
 
+// KeyboardShortcuts: mission control keyboard shortcuts (Cmd+M, Cmd+., arrows, etc.)
+Hooks.KeyboardShortcuts = {
+  mounted() {
+    this.handleKeydown = (e) => {
+      // Don't fire in input/textarea unless Esc
+      const isInput = e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA'
+
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        this.pushEvent('keyboard_shortcut', { key: 'escape' })
+        return
+      }
+
+      if (isInput) return
+
+      const mod = e.metaKey || e.ctrlKey
+
+      if (mod && e.key === 'm') {
+        e.preventDefault()
+        this.pushEvent('keyboard_shortcut', { key: 'toggle_mode' })
+      } else if (mod && e.key === '.') {
+        e.preventDefault()
+        this.pushEvent('keyboard_shortcut', { key: 'cancel' })
+      } else if (mod && e.key >= '1' && e.key <= '3') {
+        e.preventDefault()
+        this.pushEvent('keyboard_shortcut', { key: `focus_panel_${e.key}` })
+      } else if (e.key === '/' && !mod) {
+        e.preventDefault()
+        this.pushEvent('keyboard_shortcut', { key: 'focus_input' })
+      } else if (e.key === 'ArrowLeft' && !mod) {
+        e.preventDefault()
+        this.pushEvent('keyboard_shortcut', { key: 'prev_agent' })
+      } else if (e.key === 'ArrowRight' && !mod) {
+        e.preventDefault()
+        this.pushEvent('keyboard_shortcut', { key: 'next_agent' })
+      }
+    }
+
+    document.addEventListener('keydown', this.handleKeydown)
+  },
+  destroyed() {
+    document.removeEventListener('keydown', this.handleKeydown)
+  }
+}
+
 // AutoResizeTextarea: auto-grows textarea as user types
 Hooks.AutoResizeTextarea = {
   mounted() {

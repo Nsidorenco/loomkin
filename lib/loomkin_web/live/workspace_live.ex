@@ -45,7 +45,13 @@ defmodule LoomkinWeb.WorkspaceLive do
         active_inspector_tab: :files,
         collapsed_inspector: false,
         streaming_agent: nil,
-        streaming_thoughts: ""
+        streaming_thoughts: "",
+        # Command palette
+        command_palette_open: false,
+        command_palette_query: "",
+        command_palette_results: [],
+        # Ask-user pending questions
+        pending_questions: []
       )
 
     case socket.assigns.live_action do
@@ -274,12 +280,158 @@ defmodule LoomkinWeb.WorkspaceLive do
   end
 
   def handle_event("keyboard_shortcut", %{"key" => "escape"}, socket) do
-    {:noreply,
-     assign(socket, focused_agent: nil, inspector_mode: :auto_follow, permission_request: nil)}
+    if socket.assigns.command_palette_open do
+      {:noreply,
+       assign(socket,
+         command_palette_open: false,
+         command_palette_query: "",
+         command_palette_results: []
+       )}
+    else
+      {:noreply,
+       assign(socket, focused_agent: nil, inspector_mode: :auto_follow, permission_request: nil)}
+    end
   end
 
   def handle_event("keyboard_shortcut", %{"key" => "focus_input"}, socket) do
     {:noreply, push_event(socket, "focus-input", %{})}
+  end
+
+
+  def handle_event("keyboard_shortcut", %{"key" => "command_palette"}, socket) do
+    if socket.assigns.command_palette_open do
+      {:noreply,
+       assign(socket,
+         command_palette_open: false,
+         command_palette_query: "",
+         command_palette_results: []
+       )}
+    else
+      results = build_palette_results(socket, "")
+      {:noreply, assign(socket, command_palette_open: true, command_palette_results: results)}
+    end
+  end
+
+  def handle_event("keyboard_shortcut", %{"key" => "focus_panel_4"}, socket) do
+    {:noreply, assign(socket, active_inspector_tab: :graph, inspector_mode: :pinned)}
+  end
+
+  def handle_event("keyboard_shortcut", %{"key" => "focus_panel_5"}, socket) do
+    {:noreply, assign(socket, active_inspector_tab: :chat, inspector_mode: :pinned)}
+  end
+
+  def handle_event("keyboard_shortcut", %{"key" => "jump_active_agent"}, socket) do
+    agents = roster_agents(socket.assigns[:active_team_id])
+
+    active =
+      Enum.find(agents, fn a -> a[:status] in [:thinking, :executing_tool] end) ||
+        List.first(agents)
+
+    if active do
+      {:noreply, assign(socket, focused_agent: active[:name], inspector_mode: :pinned)}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  def handle_event("keyboard_shortcut", %{"key" => "toggle_activity"}, socket) do
+    new_tab = if socket.assigns.team_sub_tab == :activity, do: :graph, else: :activity
+    {:noreply, assign(socket, team_sub_tab: new_tab)}
+  end
+
+  def handle_event("palette_search", %{"value" => query}, socket) do
+    results = build_palette_results(socket, query)
+
+    {:noreply,
+     assign(socket, command_palette_query: query, command_palette_results: results)}
+  end
+
+  def handle_event("palette_select", %{"type" => "agent", "value" => agent_name}, socket) do
+    {:noreply,
+     assign(socket,
+       focused_agent: agent_name,
+       inspector_mode: :pinned,
+       command_palette_open: false,
+       command_palette_query: "",
+       command_palette_results: []
+     )}
+  end
+
+  def handle_event("palette_select", %{"type" => "tab", "value" => tab}, socket) do
+    {:noreply,
+     assign(socket,
+       active_inspector_tab: String.to_existing_atom(tab),
+       inspector_mode: :pinned,
+       command_palette_open: false,
+       command_palette_query: "",
+       command_palette_results: []
+     )}
+  end
+
+  def handle_event("palette_select", %{"type" => "action", "value" => "toggle_mode"}, socket) do
+    new_mode = if socket.assigns.mode == :solo, do: :mission_control, else: :solo
+
+    {:noreply,
+     assign(socket,
+       mode: new_mode,
+       command_palette_open: false,
+       command_palette_query: "",
+       command_palette_results: []
+     )}
+  end
+
+  def handle_event("palette_select", %{"type" => "action", "value" => "focus_input"}, socket) do
+    {:noreply,
+     socket
+     |> assign(
+       command_palette_open: false,
+       command_palette_query: "",
+       command_palette_results: []
+     )
+     |> push_event("focus-input", %{})}
+  end
+
+  def handle_event("palette_select", %{"type" => "sub_tab", "value" => tab}, socket) do
+    {:noreply,
+     assign(socket,
+       team_sub_tab: String.to_existing_atom(tab),
+       command_palette_open: false,
+       command_palette_query: "",
+       command_palette_results: []
+     )}
+  end
+
+  def handle_event("close_command_palette", _params, socket) do
+    {:noreply,
+     assign(socket,
+       command_palette_open: false,
+       command_palette_query: "",
+       command_palette_results: []
+     )}
+  end
+
+  # --- Ask User ---
+
+  def handle_event("ask_user_answer", %{"question-id" => question_id, "answer" => answer}, socket) do
+    {question, remaining} =
+      case Enum.split_with(socket.assigns.pending_questions, &(&1.question_id == question_id)) do
+        {[q], rest} -> {q, rest}
+        _ -> {nil, socket.assigns.pending_questions}
+      end
+
+    if question do
+      if answer == "__collective__" do
+        # Forward question to peer agents for collective decision
+        handle_collective_decision(question, socket.assigns.pending_questions)
+        {:noreply, assign(socket, pending_questions: remaining)}
+      else
+        # Send answer directly back to the waiting agent
+        send_ask_user_answer(question_id, answer)
+        {:noreply, assign(socket, pending_questions: remaining)}
+      end
+    else
+      {:noreply, socket}
+    end
   end
 
   # --- PubSub Info ---
@@ -764,6 +916,50 @@ defmodule LoomkinWeb.WorkspaceLive do
     {:noreply, forward_to_activity(socket, event)}
   end
 
+  # --- Ask User questions from agents ---
+
+  def handle_info({:ask_user_question, question}, socket) do
+    questions = socket.assigns.pending_questions ++ [question]
+
+    event = %{
+      id: Ecto.UUID.generate(),
+      type: :ask_user,
+      agent: question.agent_name,
+      content: question.question,
+      timestamp: DateTime.utc_now(),
+      expanded: true,
+      metadata: %{question_id: question.question_id, options: question.options}
+    }
+
+    socket =
+      socket
+      |> assign(pending_questions: questions)
+      |> append_activity_event(event)
+
+    {:noreply, socket}
+  end
+
+  def handle_info({:ask_user_answered, question_id, answer}, socket) do
+    remaining = Enum.reject(socket.assigns.pending_questions, &(&1.question_id == question_id))
+
+    event = %{
+      id: Ecto.UUID.generate(),
+      type: :message,
+      agent: "system",
+      content: "Question answered: #{answer}",
+      timestamp: DateTime.utc_now(),
+      expanded: false,
+      metadata: %{}
+    }
+
+    socket =
+      socket
+      |> assign(pending_questions: remaining)
+      |> append_activity_event(event)
+
+    {:noreply, socket}
+  end
+
   # Catch-all for unhandled PubSub messages (team events, etc.)
   def handle_info(_msg, socket) do
     {:noreply, socket}
@@ -786,6 +982,9 @@ defmodule LoomkinWeb.WorkspaceLive do
         tool_name={@permission_request.tool_name}
         tool_path={@permission_request.tool_path}
       />
+
+      <%!-- Command palette overlay --%>
+      {render_command_palette(assigns)}
 
       <%!-- ── Header ── --%>
       <header class="flex flex-col gap-3 bg-gray-900 border-b border-gray-800 header-glow px-3 py-3 sm:px-4 lg:flex-row lg:items-center lg:justify-between lg:px-6">
@@ -1020,6 +1219,16 @@ defmodule LoomkinWeb.WorkspaceLive do
         known_agents={@activity_known_agents}
         focused_agent={@focused_agent}
       />
+
+      <%!-- Pending ask_user questions --%>
+      <div :if={@pending_questions != []} class="border-t border-violet-500/20 bg-gray-900/90 px-3 py-2">
+        <.live_component
+          module={LoomkinWeb.AskUserComponent}
+          id="ask-user-questions"
+          questions={@pending_questions}
+        />
+      </div>
+
       {render_input_bar(assigns)}
     </div>
 
@@ -1172,7 +1381,13 @@ defmodule LoomkinWeb.WorkspaceLive do
             <.icon name="hero-x-mark-mini" class="w-3.5 h-3.5" />
           </button>
         </div>
-        <pre class="flex-1 overflow-auto p-3 text-xs font-mono text-gray-300 whitespace-pre">{@file_content}</pre>
+        <div
+          id={"file-preview-#{@selected_file}"}
+          phx-hook="SyntaxHighlight"
+          class="flex-1 overflow-auto file-preview-container"
+        >
+          <pre class="file-preview-pre"><code class={"language-#{language_from_path(@selected_file)}"}>{@file_content}</code></pre>
+        </div>
       </div>
     </div>
     """
@@ -1353,6 +1568,26 @@ defmodule LoomkinWeb.WorkspaceLive do
 
         assign(socket, activity_events: events, activity_known_agents: agents)
     end
+  end
+
+  # Append a pre-formed activity event (bypasses activity_event_from pattern matching)
+  defp append_activity_event(socket, event) do
+    events = socket.assigns.activity_events ++ [event]
+
+    events =
+      if length(events) > @max_activity_events,
+        do: Enum.drop(events, length(events) - @max_activity_events),
+        else: events
+
+    agents = socket.assigns.activity_known_agents
+
+    agents =
+      case trackable_agent_name(event.agent) do
+        nil -> agents
+        name -> if name in agents, do: agents, else: agents ++ [name]
+      end
+
+    assign(socket, activity_events: events, activity_known_agents: agents)
   end
 
   # Merge tool_complete result into the most recent tool_executing event for that agent
@@ -1703,6 +1938,7 @@ defmodule LoomkinWeb.WorkspaceLive do
   defp tool_display_content("peer_ask_question", _, _), do: "Asking the team"
   defp tool_display_content("context_offload", _, _), do: "Offloading context"
   defp tool_display_content("context_retrieve", _, _), do: "Retrieving context"
+  defp tool_display_content("ask_user", _, _), do: "Asking the user"
 
   defp tool_display_content(name, target, _payload) when is_binary(target),
     do: "#{name} on #{target}"
@@ -1886,4 +2122,183 @@ defmodule LoomkinWeb.WorkspaceLive do
   defp parse_shell_result(_result) do
     %{command: "(shell)", exit_code: 0, output: ""}
   end
+
+  # Map file extensions to highlight.js language names
+  defp language_from_path(nil), do: "plaintext"
+
+  defp language_from_path(path) do
+    case Path.extname(path) do
+      ext when ext in [".ex", ".exs"] -> "elixir"
+      ".js" -> "javascript"
+      ".json" -> "json"
+      ext when ext in [".sh", ".bash", ".zsh"] -> "bash"
+      ".css" -> "css"
+      ext when ext in [".html", ".heex", ".leex"] -> "html"
+      ".xml" -> "xml"
+      ".md" -> "markdown"
+      ext when ext in [".yml", ".yaml"] -> "yaml"
+      ".diff" -> "diff"
+      ".toml" -> "elixir"
+      _ -> "plaintext"
+    end
+  end
+
+  # --- Ask User helpers ---
+
+  defp send_ask_user_answer(question_id, answer) do
+    case Registry.lookup(Loomkin.Teams.AgentRegistry, {:ask_user, question_id}) do
+      [{pid, _}] ->
+        send(pid, {:ask_user_answer, question_id, answer})
+
+      [] ->
+        Logger.warning("[AskUser] No waiting process for question #{question_id}")
+    end
+  end
+
+  defp handle_collective_decision(question, _pending_questions) do
+    team_id = question.team_id
+    question_id = question.question_id
+    options_text = Enum.join(question.options, ", ")
+
+    collective_prompt =
+      "The human deferred this question to the collective. " <>
+        "Question from #{question.agent_name}: #{question.question} " <>
+        "Options: #{options_text}. " <>
+        "Reply with your preferred option."
+
+    Phoenix.PubSub.broadcast(
+      Loomkin.PubSub,
+      "team:#{team_id}",
+      {:peer_message, "system", collective_prompt}
+    )
+
+    # Fallback: if no agent answers within 30s, use the first option
+    Task.Supervisor.start_child(Loomkin.Teams.TaskSupervisor, fn ->
+      Process.sleep(30_000)
+
+      case Registry.lookup(Loomkin.Teams.AgentRegistry, {:ask_user, question_id}) do
+        [{pid, _}] ->
+          fallback = List.first(question.options) || "No consensus"
+          send(pid, {:ask_user_answer, question_id, "Collective: #{fallback}"})
+
+        [] ->
+          :ok
+      end
+    end)
+  end
+
+  # --- Command Palette ---
+
+  defp build_palette_results(socket, query) do
+    q = String.downcase(String.trim(query))
+    team_id = socket.assigns[:active_team_id]
+
+    agents =
+      team_id
+      |> roster_agents()
+      |> Enum.map(fn a ->
+        %{type: :agent, label: a[:name] || "unknown", detail: "Agent", value: a[:name] || ""}
+      end)
+
+    tabs =
+      Enum.map([:files, :diff, :terminal, :graph, :chat], fn tab ->
+        %{type: :tab, label: Atom.to_string(tab), detail: "Inspector Tab", value: Atom.to_string(tab)}
+      end)
+
+    sub_tabs =
+      Enum.map([:activity, :cost, :graph], fn tab ->
+        %{type: :sub_tab, label: Atom.to_string(tab), detail: "Team Sub-tab", value: Atom.to_string(tab)}
+      end)
+
+    actions = [
+      %{type: :action, label: "Toggle Mode (Solo/Mission Control)", detail: "Action", value: "toggle_mode"},
+      %{type: :action, label: "Focus Input", detail: "Action", value: "focus_input"}
+    ]
+
+    all = agents ++ tabs ++ sub_tabs ++ actions
+
+    if q == "" do
+      all
+    else
+      Enum.filter(all, fn item ->
+        String.contains?(String.downcase(item.label), q) ||
+          String.contains?(String.downcase(item.detail), q)
+      end)
+    end
+  end
+
+  defp render_command_palette(assigns) do
+    ~H"""
+    <div
+      :if={@command_palette_open}
+      class="fixed inset-0 z-50 flex items-start justify-center pt-[15vh]"
+      phx-click="close_command_palette"
+    >
+      <div class="fixed inset-0 bg-black/60" />
+      <div
+        class="relative w-full max-w-lg bg-gray-900 border border-gray-700 rounded-xl shadow-2xl overflow-hidden"
+        phx-click-away="close_command_palette"
+        phx-hook="CommandPalette"
+        id="command-palette"
+      >
+        <div class="flex items-center gap-2 px-4 py-3 border-b border-gray-800">
+          <svg class="w-5 h-5 text-gray-500 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+          <input
+            type="text"
+            id="command-palette-input"
+            placeholder="Search agents, tabs, actions..."
+            value={@command_palette_query}
+            phx-keyup="palette_search"
+            name="query"
+            class="flex-1 bg-transparent text-sm text-gray-100 placeholder-gray-500 outline-none"
+            autocomplete="off"
+            phx-debounce="100"
+          />
+          <kbd class="px-1.5 py-0.5 text-[10px] font-mono text-gray-500 bg-gray-800 rounded">Esc</kbd>
+        </div>
+
+        <div class="max-h-72 overflow-y-auto py-2">
+          <div :if={@command_palette_results == []} class="px-4 py-6 text-center text-sm text-gray-500">
+            No results found
+          </div>
+          <button
+            :for={item <- @command_palette_results}
+            data-palette-item
+            phx-click="palette_select"
+            phx-value-type={item.type}
+            phx-value-value={item.value}
+            class="flex items-center justify-between w-full px-4 py-2 text-left text-sm hover:bg-gray-800 focus:bg-gray-800 focus:outline-none transition-colors"
+          >
+            <div class="flex items-center gap-2 min-w-0">
+              <span class={palette_icon_class(item.type)} />
+              <span class="text-gray-200 truncate">{item.label}</span>
+            </div>
+            <span class="text-xs text-gray-500 flex-shrink-0 ml-2">{item.detail}</span>
+          </button>
+        </div>
+
+        <div class="flex items-center gap-4 px-4 py-2 border-t border-gray-800 text-[10px] text-gray-600">
+          <span>
+            <kbd class="px-1 py-0.5 bg-gray-800 rounded font-mono">↑↓</kbd> navigate
+          </span>
+          <span>
+            <kbd class="px-1 py-0.5 bg-gray-800 rounded font-mono">Enter</kbd> select
+          </span>
+          <span>
+            <kbd class="px-1 py-0.5 bg-gray-800 rounded font-mono">Esc</kbd> close
+          </span>
+        </div>
+      </div>
+    </div>
+    """
+  end
+
+  defp palette_icon_class(:agent), do: "w-2 h-2 rounded-full bg-violet-400"
+  defp palette_icon_class(:tab), do: "w-2 h-2 rounded-sm bg-blue-400"
+  defp palette_icon_class(:sub_tab), do: "w-2 h-2 rounded-sm bg-emerald-400"
+  defp palette_icon_class(:action), do: "w-2 h-2 rounded-full bg-amber-400"
+  defp palette_icon_class(_), do: "w-2 h-2 rounded-full bg-gray-400"
+
 end

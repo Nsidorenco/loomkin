@@ -72,8 +72,9 @@ defmodule LoomkinWeb.DecisionGraphComponent do
   def update(assigns, socket) do
     socket = assign(socket, assigns)
     session_id = assigns[:session_id]
+    team_id = assigns[:team_id]
 
-    {nodes, edges, pulse} = load_graph_data(session_id)
+    {nodes, edges, pulse} = load_graph_data(session_id, team_id)
     node_ids = MapSet.new(nodes, & &1.id)
 
     # Filter edges to only those connecting our nodes
@@ -155,7 +156,9 @@ defmodule LoomkinWeb.DecisionGraphComponent do
       </style>
 
       <div class="px-3 py-2.5 border-b border-gray-800">
-        <h3 class="text-[10px] font-semibold text-gray-500 uppercase tracking-widest">Decision Graph</h3>
+        <h3 class="text-[10px] font-semibold text-gray-500 uppercase tracking-widest">
+          Decision Graph
+        </h3>
       </div>
 
       <%!-- Agent filter buttons --%>
@@ -221,16 +224,44 @@ defmodule LoomkinWeb.DecisionGraphComponent do
             class="block"
           >
             <defs>
-              <marker id="arrowhead-gray" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+              <marker
+                id="arrowhead-gray"
+                markerWidth="8"
+                markerHeight="6"
+                refX="8"
+                refY="3"
+                orient="auto"
+              >
                 <polygon points="0 0, 8 3, 0 6" fill="#6b7280" />
               </marker>
-              <marker id="arrowhead-green" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+              <marker
+                id="arrowhead-green"
+                markerWidth="8"
+                markerHeight="6"
+                refX="8"
+                refY="3"
+                orient="auto"
+              >
                 <polygon points="0 0, 8 3, 0 6" fill="#22c55e" />
               </marker>
-              <marker id="arrowhead-red" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+              <marker
+                id="arrowhead-red"
+                markerWidth="8"
+                markerHeight="6"
+                refX="8"
+                refY="3"
+                orient="auto"
+              >
                 <polygon points="0 0, 8 3, 0 6" fill="#ef4444" />
               </marker>
-              <marker id="arrowhead-orange" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+              <marker
+                id="arrowhead-orange"
+                markerWidth="8"
+                markerHeight="6"
+                refX="8"
+                refY="3"
+                orient="auto"
+              >
                 <polygon points="0 0, 8 3, 0 6" fill="#f97316" />
               </marker>
             </defs>
@@ -265,7 +296,10 @@ defmodule LoomkinWeb.DecisionGraphComponent do
           </div>
 
           <%!-- Agent legend --%>
-          <div :if={@agents != []} class="px-3 py-2 border-t border-gray-800/50 flex flex-wrap gap-x-3 gap-y-1.5">
+          <div
+            :if={@agents != []}
+            class="px-3 py-2 border-t border-gray-800/50 flex flex-wrap gap-x-3 gap-y-1.5"
+          >
             <span class="text-[10px] text-gray-600 uppercase tracking-wider mr-1">Agents:</span>
             <div :for={agent <- @agents} class="flex items-center gap-1.5">
               <span
@@ -277,7 +311,13 @@ defmodule LoomkinWeb.DecisionGraphComponent do
           </div>
 
           <%!-- Node detail panel --%>
-          <.node_detail :if={@selected_node} node={@selected_node} edges={@edges} nodes={@nodes} myself={@myself} />
+          <.node_detail
+            :if={@selected_node}
+            node={@selected_node}
+            edges={@edges}
+            nodes={@nodes}
+            myself={@myself}
+          />
         <% end %>
       </div>
 
@@ -468,7 +508,9 @@ defmodule LoomkinWeb.DecisionGraphComponent do
       <div class="px-3 py-3 space-y-2.5 text-xs max-h-64 overflow-y-auto">
         <div class="flex gap-2">
           <span class="text-gray-500">Type:</span>
-          <span class="text-gray-300 bg-gray-800/60 rounded px-1.5 py-0.5">{Atom.to_string(@node.node_type)}</span>
+          <span class="text-gray-300 bg-gray-800/60 rounded px-1.5 py-0.5">
+            {Atom.to_string(@node.node_type)}
+          </span>
         </div>
         <div class="flex gap-2">
           <span class="text-gray-500">Status:</span>
@@ -678,11 +720,25 @@ defmodule LoomkinWeb.DecisionGraphComponent do
     "#{goals} active goals, #{decisions} recent decisions, #{gaps} coverage gaps"
   end
 
-  defp load_graph_data(nil), do: {[], [], nil}
+  defp load_graph_data(nil, nil), do: {[], [], nil}
 
-  defp load_graph_data(session_id) do
+  defp load_graph_data(session_id, team_id) do
     try do
-      nodes = Graph.list_nodes(session_id: session_id)
+      session_nodes =
+        if is_binary(session_id) do
+          Graph.list_nodes(session_id: session_id)
+        else
+          []
+        end
+
+      team_nodes =
+        if is_binary(team_id) do
+          Graph.list_nodes(team_id: team_id)
+        else
+          []
+        end
+
+      nodes = Enum.uniq_by(session_nodes ++ team_nodes, & &1.id)
       edges = Graph.list_edges([])
       pulse = Pulse.generate()
       {nodes, edges, pulse}

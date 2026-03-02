@@ -6,6 +6,7 @@ defmodule LoomkinWeb.WorkspaceLive do
   alias Loomkin.Teams
 
   require Logger
+  @max_activity_events 200
 
   def mount(params, _session, socket) do
     socket =
@@ -37,7 +38,7 @@ defmodule LoomkinWeb.WorkspaceLive do
         activity_events: [],
         activity_known_agents: [],
         # Mission control assigns
-        mode: :solo,
+        mode: :mission_control,
         focused_agent: nil,
         inspector_mode: :auto_follow,
         active_inspector_tab: :files,
@@ -306,7 +307,10 @@ defmodule LoomkinWeb.WorkspaceLive do
     {:noreply, assign(socket, status: status)}
   end
 
-  def handle_info({:tool_executing, source, %{tool_name: name, tool_target: target}} = event, socket) do
+  def handle_info(
+        {:tool_executing, source, %{tool_name: name, tool_target: target}} = event,
+        socket
+      ) do
     display = if target && target != "*", do: "#{name}: #{target}", else: name
 
     socket =
@@ -613,7 +617,8 @@ defmodule LoomkinWeb.WorkspaceLive do
         end
       end)
 
-    {:noreply, assign(socket, activity_events: events, streaming_agent: nil, streaming_thoughts: "")}
+    {:noreply,
+     assign(socket, activity_events: events, streaming_agent: nil, streaming_thoughts: "")}
   end
 
   def handle_info({:child_team_created, child_team_id}, socket) do
@@ -655,7 +660,8 @@ defmodule LoomkinWeb.WorkspaceLive do
           do: :solo,
           else: socket.assigns.mode
 
-      {:noreply, assign(socket, child_teams: child_teams, active_team_id: active_team_id, mode: mode)}
+      {:noreply,
+       assign(socket, child_teams: child_teams, active_team_id: active_team_id, mode: mode)}
     end
   end
 
@@ -761,7 +767,7 @@ defmodule LoomkinWeb.WorkspaceLive do
   def render(assigns) do
     ~H"""
     <div
-      class="flex flex-col h-screen bg-gray-950 text-gray-100"
+      class="flex flex-col h-screen overflow-hidden bg-gray-950 text-gray-100"
       phx-hook="KeyboardShortcuts"
       id="workspace-shortcuts"
     >
@@ -775,8 +781,8 @@ defmodule LoomkinWeb.WorkspaceLive do
       />
 
       <%!-- ── Header ── --%>
-      <header class="flex items-center justify-between px-6 py-3 bg-gray-900 border-b border-gray-800 header-glow">
-        <div class="flex items-center gap-4">
+      <header class="flex flex-col gap-3 bg-gray-900 border-b border-gray-800 header-glow px-3 py-3 sm:px-4 lg:flex-row lg:items-center lg:justify-between lg:px-6">
+        <div class="flex min-w-0 flex-wrap items-center gap-3 lg:gap-4">
           <%!-- Branding --%>
           <div class="flex items-center gap-2">
             <svg class="w-7 h-7" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -802,38 +808,68 @@ defmodule LoomkinWeb.WorkspaceLive do
           />
 
           <%!-- Project path switcher --%>
-          <div class="flex items-center gap-2 text-sm text-gray-400">
-            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+          <div class="hidden items-center gap-2 text-sm text-gray-400 md:flex">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              class="w-4 h-4"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"
+              />
             </svg>
             <%= if @editing_project_path do %>
               <form phx-submit="set_project_path" class="flex items-center gap-1">
-                <input type="text" name="path" value={@project_path}
+                <input
+                  type="text"
+                  name="path"
+                  value={@project_path}
                   class="bg-gray-800 border border-gray-700 rounded px-2 py-0.5 text-sm text-gray-200 w-64"
-                  autofocus />
-                <button type="submit" class="text-xs text-violet-400 hover:text-violet-300">Go</button>
-                <button type="button" phx-click="cancel_edit_project" class="text-xs text-gray-500 hover:text-gray-400">Cancel</button>
+                  autofocus
+                />
+                <button type="submit" class="text-xs text-violet-400 hover:text-violet-300">
+                  Go
+                </button>
+                <button
+                  type="button"
+                  phx-click="cancel_edit_project"
+                  class="text-xs text-gray-500 hover:text-gray-400"
+                >
+                  Cancel
+                </button>
               </form>
             <% else %>
-              <button phx-click="edit_project_path" class="hover:text-gray-200 transition truncate max-w-xs" title={@project_path}>
+              <button
+                phx-click="edit_project_path"
+                class="hover:text-gray-200 transition truncate max-w-xs"
+                title={@project_path}
+              >
                 {@project_path}
               </button>
             <% end %>
           </div>
 
           <%!-- Team indicator (mission control mode) --%>
-          <div :if={@mode == :mission_control && @active_team_id} class="flex items-center gap-2">
+          <div
+            :if={@mode == :mission_control && @active_team_id}
+            class="flex items-center gap-2 min-w-0"
+          >
             <span class="text-xs text-violet-400 font-medium">
               Team: {short_team_id(@active_team_id)}
             </span>
-            <span class="text-xs text-gray-500">
-              {length(@activity_known_agents)} agents
+            <span class="hidden text-xs text-gray-500 sm:inline">
+              {roster_agent_count(@active_team_id)} agents
             </span>
             <select
               :if={@child_teams != []}
               phx-change="switch_team"
               name="team-id"
-              class="text-xs bg-gray-800 border border-gray-700 rounded px-1.5 py-0.5 text-gray-300 focus:outline-none focus:ring-1 focus:ring-violet-500/50"
+              class="max-w-[11rem] truncate text-xs bg-gray-800 border border-gray-700 rounded px-1.5 py-0.5 text-gray-300 focus:outline-none focus:ring-1 focus:ring-violet-500/50"
             >
               <option
                 :for={tid <- [@team_id | @child_teams]}
@@ -846,7 +882,7 @@ defmodule LoomkinWeb.WorkspaceLive do
           </div>
         </div>
 
-        <div class="flex items-center gap-3">
+        <div class="flex flex-wrap items-center gap-2 sm:gap-3 lg:justify-end">
           <%!-- Mode toggle (visible when team exists) --%>
           <button
             :if={@team_id}
@@ -854,7 +890,10 @@ defmodule LoomkinWeb.WorkspaceLive do
             class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-all duration-200 bg-gray-800/60 hover:bg-gray-800 text-gray-300 hover:text-violet-400"
           >
             <span :if={@mode == :solo} class="hero-user-group-mini inline-block w-3.5 h-3.5" />
-            <span :if={@mode == :mission_control} class="hero-chat-bubble-left-right-mini inline-block w-3.5 h-3.5" />
+            <span
+              :if={@mode == :mission_control}
+              class="hero-chat-bubble-left-right-mini inline-block w-3.5 h-3.5"
+            />
             {if @mode == :mission_control, do: "Solo", else: "Mission Control"}
           </button>
 
@@ -881,7 +920,7 @@ defmodule LoomkinWeb.WorkspaceLive do
           />
 
           <%!-- Status indicator --%>
-          <div class={"flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-300 " <> status_pill_class(@status)}>
+          <div class={"flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium transition-all duration-300 " <> status_pill_class(@status)}>
             <span class={status_dot_class(@status)} />
             {status_label(@status, @current_tool_name)}
           </div>
@@ -889,7 +928,7 @@ defmodule LoomkinWeb.WorkspaceLive do
       </header>
 
       <%!-- ── Main Content — branches on mode ── --%>
-      <div class="flex flex-1 min-h-0">
+      <div class="flex flex-1 min-h-0 flex-col xl:flex-row">
         {render_mode(@mode, assigns)}
       </div>
     </div>
@@ -901,7 +940,7 @@ defmodule LoomkinWeb.WorkspaceLive do
   defp render_mode(:solo, assigns) do
     ~H"""
     <%!-- Left: Chat + Input --%>
-    <div class="flex-1 flex flex-col min-w-0">
+    <div class="flex-1 flex flex-col min-w-0 min-h-0">
       <.live_component
         module={LoomkinWeb.ChatComponent}
         id="chat"
@@ -919,7 +958,7 @@ defmodule LoomkinWeb.WorkspaceLive do
     </div>
 
     <%!-- Right: Sidebar --%>
-    <div class="w-96 border-l border-gray-800 flex flex-col bg-gray-900/50">
+    <div class="h-[18rem] w-full border-t border-gray-800 bg-gray-900/50 flex flex-col xl:h-auto xl:w-96 xl:border-l xl:border-t-0">
       <%!-- Sidebar tab bar (no :team tab — that's in mission control) --%>
       <div class="flex items-center gap-1 px-3 py-2 border-b border-gray-800 bg-gray-900/80 overflow-x-auto flex-shrink-0">
         <button
@@ -964,7 +1003,7 @@ defmodule LoomkinWeb.WorkspaceLive do
     />
 
     <%!-- Center: Activity Feed (flex-1) + Input Bar --%>
-    <div class="flex-1 flex flex-col min-w-0">
+    <div class="flex-1 flex flex-col min-w-0 min-h-0">
       <.live_component
         module={LoomkinWeb.TeamActivityComponent}
         id="activity-feed"
@@ -996,6 +1035,7 @@ defmodule LoomkinWeb.WorkspaceLive do
       architect_phase={@architect_phase}
       plan_steps={@plan_steps}
       current_step={@current_step}
+      session_id={@session_id}
       team_id={@active_team_id}
       project_path={@project_path}
     />
@@ -1006,7 +1046,7 @@ defmodule LoomkinWeb.WorkspaceLive do
 
   defp render_input_bar(assigns) do
     ~H"""
-    <form phx-submit="send_message" class="p-4 border-t border-gray-800 bg-gray-900/80">
+    <form phx-submit="send_message" class="border-t border-gray-800 bg-gray-900/80 p-3 sm:p-4">
       <div class="flex gap-3 items-end">
         <div class="flex-1 relative">
           <textarea
@@ -1156,6 +1196,7 @@ defmodule LoomkinWeb.WorkspaceLive do
       module={LoomkinWeb.DecisionGraphComponent}
       id="decision-graph"
       session_id={@session_id}
+      team_id={@active_team_id}
     />
     """
   end
@@ -1253,6 +1294,7 @@ defmodule LoomkinWeb.WorkspaceLive do
       module={LoomkinWeb.DecisionGraphComponent}
       id="team-decision-graph"
       session_id={@session_id}
+      team_id={@display_team_id}
     />
     """
   end
@@ -1277,8 +1319,6 @@ defmodule LoomkinWeb.WorkspaceLive do
     Phoenix.PubSub.subscribe(Loomkin.PubSub, "team:#{team_id}:decisions")
   end
 
-  @max_activity_events 200
-
   defp forward_to_activity(socket, pubsub_event) do
     case activity_event_from(pubsub_event) do
       nil ->
@@ -1296,7 +1336,12 @@ defmodule LoomkinWeb.WorkspaceLive do
             else: events
 
         agents = socket.assigns.activity_known_agents
-        agents = if event.agent in agents, do: agents, else: agents ++ [event.agent]
+
+        agents =
+          case trackable_agent_name(event.agent) do
+            nil -> agents
+            name -> if name in agents, do: agents, else: agents ++ [name]
+          end
 
         assign(socket, activity_events: events, activity_known_agents: agents)
     end
@@ -1383,14 +1428,31 @@ defmodule LoomkinWeb.WorkspaceLive do
 
   # --- Agent status: only surface meaningful transitions, skip noisy ones ---
 
-  defp activity_event_from({:agent_status, _agent, status}) when status in [:idle, :working], do: nil
+  defp activity_event_from({:agent_status, _agent, status}) when status in [:idle, :working],
+    do: nil
 
   defp activity_event_from({:agent_status, agent, :blocked}) do
-    %{id: Ecto.UUID.generate(), type: :error, agent: agent, content: "Blocked — waiting for input", timestamp: DateTime.utc_now(), expanded: false, metadata: %{}}
+    %{
+      id: Ecto.UUID.generate(),
+      type: :error,
+      agent: agent,
+      content: "Blocked — waiting for input",
+      timestamp: DateTime.utc_now(),
+      expanded: false,
+      metadata: %{}
+    }
   end
 
   defp activity_event_from({:agent_status, agent, :error}) do
-    %{id: Ecto.UUID.generate(), type: :error, agent: agent, content: "Encountered an error", timestamp: DateTime.utc_now(), expanded: false, metadata: %{}}
+    %{
+      id: Ecto.UUID.generate(),
+      type: :error,
+      agent: agent,
+      content: "Encountered an error",
+      timestamp: DateTime.utc_now(),
+      expanded: false,
+      metadata: %{}
+    }
   end
 
   defp activity_event_from({:agent_status, _agent, _}), do: nil
@@ -1411,7 +1473,15 @@ defmodule LoomkinWeb.WorkspaceLive do
           "Encountered an error"
       end
 
-    %{id: Ecto.UUID.generate(), type: :error, agent: agent, content: content, timestamp: DateTime.utc_now(), expanded: false, metadata: %{}}
+    %{
+      id: Ecto.UUID.generate(),
+      type: :error,
+      agent: agent,
+      content: content,
+      timestamp: DateTime.utc_now(),
+      expanded: false,
+      metadata: %{}
+    }
   end
 
   # --- Streaming: skip start/end noise ---
@@ -1423,10 +1493,18 @@ defmodule LoomkinWeb.WorkspaceLive do
   # --- Task lifecycle: human-readable content ---
 
   defp activity_event_from({:task_assigned, _task_id, agent}) do
-    %{id: Ecto.UUID.generate(), type: :task_assigned, agent: agent, content: "Picked up a task", timestamp: DateTime.utc_now(), expanded: false, metadata: %{}}
+    %{
+      id: Ecto.UUID.generate(),
+      type: :task_assigned,
+      agent: agent,
+      content: "Picked up a task",
+      timestamp: DateTime.utc_now(),
+      expanded: false,
+      metadata: %{}
+    }
   end
 
-  defp activity_event_from({:task_started, _task_id, agent}) do
+  defp activity_event_from({:task_started, _task_id, _agent}) do
     nil
     # Task start is redundant with task_assigned — skip to reduce noise
     |> then(fn _ -> nil end)
@@ -1439,18 +1517,43 @@ defmodule LoomkinWeb.WorkspaceLive do
         _ -> "Task completed"
       end
 
-    %{id: Ecto.UUID.generate(), type: :task_complete, agent: agent, content: content, timestamp: DateTime.utc_now(), expanded: false, metadata: %{}}
+    %{
+      id: Ecto.UUID.generate(),
+      type: :task_complete,
+      agent: agent,
+      content: content,
+      timestamp: DateTime.utc_now(),
+      expanded: false,
+      metadata: %{}
+    }
   end
 
   defp activity_event_from({:task_failed, _task_id, agent, reason}) do
     content = "Task failed: #{String.slice(to_string(reason), 0, 300)}"
-    %{id: Ecto.UUID.generate(), type: :error, agent: agent, content: content, timestamp: DateTime.utc_now(), expanded: false, metadata: %{}}
+
+    %{
+      id: Ecto.UUID.generate(),
+      type: :error,
+      agent: agent,
+      content: content,
+      timestamp: DateTime.utc_now(),
+      expanded: false,
+      metadata: %{}
+    }
   end
 
   # --- Inter-agent communication ---
 
   defp activity_event_from({:decision_logged, _node_id, agent}) do
-    %{id: Ecto.UUID.generate(), type: :decision, agent: agent, content: "Logged a decision", timestamp: DateTime.utc_now(), expanded: false, metadata: %{}}
+    %{
+      id: Ecto.UUID.generate(),
+      type: :decision,
+      agent: agent,
+      content: "Logged a decision",
+      timestamp: DateTime.utc_now(),
+      expanded: false,
+      metadata: %{}
+    }
   end
 
   defp activity_event_from({:context_update, agent, payload}) do
@@ -1461,33 +1564,86 @@ defmodule LoomkinWeb.WorkspaceLive do
         _ -> "Shared a discovery"
       end
 
-    %{id: Ecto.UUID.generate(), type: :discovery, agent: agent, content: content, timestamp: DateTime.utc_now(), expanded: false, metadata: %{}}
+    %{
+      id: Ecto.UUID.generate(),
+      type: :discovery,
+      agent: agent,
+      content: content,
+      timestamp: DateTime.utc_now(),
+      expanded: false,
+      metadata: %{}
+    }
   end
 
   defp activity_event_from({:context_offloaded, agent, payload}) do
     topic = if is_map(payload), do: payload[:topic] || "context", else: "context"
-    %{id: Ecto.UUID.generate(), type: :context_offload, agent: agent, content: "Stored context: #{topic}", timestamp: DateTime.utc_now(), expanded: false, metadata: %{}}
+
+    %{
+      id: Ecto.UUID.generate(),
+      type: :context_offload,
+      agent: agent,
+      content: "Stored context: #{topic}",
+      timestamp: DateTime.utc_now(),
+      expanded: false,
+      metadata: %{}
+    }
   end
 
   defp activity_event_from({:role_changed, agent, old_role, new_role}) do
-    %{id: Ecto.UUID.generate(), type: :message, agent: agent, content: "Changed role: #{old_role} → #{new_role}", timestamp: DateTime.utc_now(), expanded: false, metadata: %{}}
+    %{
+      id: Ecto.UUID.generate(),
+      type: :message,
+      agent: agent,
+      content: "Changed role: #{old_role} → #{new_role}",
+      timestamp: DateTime.utc_now(),
+      expanded: false,
+      metadata: %{}
+    }
   end
 
   defp activity_event_from({:agent_escalation, agent, from, to}) do
-    %{id: Ecto.UUID.generate(), type: :message, agent: agent, content: "Escalated model: #{from} → #{to}", timestamp: DateTime.utc_now(), expanded: false, metadata: %{}}
+    %{
+      id: Ecto.UUID.generate(),
+      type: :message,
+      agent: agent,
+      content: "Escalated model: #{from} → #{to}",
+      timestamp: DateTime.utc_now(),
+      expanded: false,
+      metadata: %{}
+    }
   end
 
   defp activity_event_from({:keeper_created, payload}) do
-    agent = if is_map(payload), do: payload[:agent] || payload[:source] || "system", else: "system"
+    agent =
+      if is_map(payload), do: payload[:agent] || payload[:source] || "system", else: "system"
+
     topic = if is_map(payload), do: payload[:topic] || "context", else: "context"
     tokens = if is_map(payload), do: payload[:tokens], else: nil
     suffix = if tokens, do: " (#{format_token_count(tokens)} tokens)", else: ""
-    %{id: Ecto.UUID.generate(), type: :context_offload, agent: agent, content: "Created keeper: #{topic}#{suffix}", timestamp: DateTime.utc_now(), expanded: false, metadata: %{}}
+
+    %{
+      id: Ecto.UUID.generate(),
+      type: :context_offload,
+      agent: agent,
+      content: "Created keeper: #{topic}#{suffix}",
+      timestamp: DateTime.utc_now(),
+      expanded: false,
+      metadata: %{}
+    }
   end
 
   defp activity_event_from({:tasks_unblocked, task_ids}) do
     count = length(task_ids)
-    %{id: Ecto.UUID.generate(), type: :message, agent: "system", content: "#{count} task#{if count == 1, do: "", else: "s"} unblocked", timestamp: DateTime.utc_now(), expanded: false, metadata: %{}}
+
+    %{
+      id: Ecto.UUID.generate(),
+      type: :message,
+      agent: "system",
+      content: "#{count} task#{if count == 1, do: "", else: "s"} unblocked",
+      timestamp: DateTime.utc_now(),
+      expanded: false,
+      metadata: %{}
+    }
   end
 
   defp activity_event_from(_), do: nil
@@ -1588,10 +1744,13 @@ defmodule LoomkinWeb.WorkspaceLive do
 
   defp roster_agents(team_id) do
     case Loomkin.Teams.Manager.list_agents(team_id) do
-      {:ok, agents} -> agents
-      _ -> []
+      agents when is_list(agents) -> agents
+      {:ok, agents} when is_list(agents) -> agents
+      _other -> []
     end
   end
+
+  defp roster_agent_count(team_id), do: team_id |> roster_agents() |> length()
 
   defp roster_tasks(nil), do: []
 
@@ -1640,6 +1799,18 @@ defmodule LoomkinWeb.WorkspaceLive do
 
   defp team_tab_visible?(socket),
     do: socket.assigns[:active_tab] == :team || socket.assigns[:mode] == :mission_control
+
+  defp trackable_agent_name(name) when is_binary(name) do
+    trimmed = String.trim(name)
+
+    if trimmed in ["", "You", "system"] do
+      nil
+    else
+      trimmed
+    end
+  end
+
+  defp trackable_agent_name(_), do: nil
 
   defp short_team_id(id) when is_binary(id), do: String.slice(id, 0, 8)
   defp short_team_id(_), do: "?"

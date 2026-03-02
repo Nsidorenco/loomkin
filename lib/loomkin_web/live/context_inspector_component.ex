@@ -50,7 +50,7 @@ defmodule LoomkinWeb.ContextInspectorComponent do
         />
       <% else %>
         <%!-- Header / Tab bar --%>
-        <div class="flex items-center gap-1 px-3 py-2 border-b border-gray-800 bg-gray-900/80 flex-shrink-0">
+        <div class="flex items-center gap-1 overflow-x-auto px-3 py-2 border-b border-gray-800 bg-gray-900/80 flex-shrink-0">
           <button
             :for={tab <- @tabs}
             phx-click="switch_inspector_tab"
@@ -92,7 +92,7 @@ defmodule LoomkinWeb.ContextInspectorComponent do
 
   defp collapsed_strip(assigns) do
     ~H"""
-    <div class="flex flex-col items-center py-2 gap-1 h-full">
+    <div class="flex h-full w-full items-center justify-center gap-1 px-2 py-2 xl:flex-col xl:items-center xl:justify-start xl:px-0">
       <button
         :for={tab <- @tabs}
         phx-click="switch_inspector_tab"
@@ -104,7 +104,7 @@ defmodule LoomkinWeb.ContextInspectorComponent do
         <span class="text-sm">{tab_icon(tab)}</span>
       </button>
 
-      <div class="mt-auto">
+      <div class="ml-1 xl:ml-0 xl:mt-auto">
         <button
           phx-click="toggle_collapse"
           phx-target={@myself}
@@ -121,6 +121,7 @@ defmodule LoomkinWeb.ContextInspectorComponent do
   # --- Follow mode indicator ---
 
   defp follow_indicator(%{focused_agent: nil} = assigns), do: ~H""
+
   defp follow_indicator(%{inspector_mode: :auto_follow} = assigns) do
     ~H"""
     <div class="flex items-center gap-1.5">
@@ -129,6 +130,7 @@ defmodule LoomkinWeb.ContextInspectorComponent do
     </div>
     """
   end
+
   defp follow_indicator(%{inspector_mode: :pinned} = assigns) do
     ~H"""
     <div class="flex items-center gap-1.5">
@@ -144,6 +146,7 @@ defmodule LoomkinWeb.ContextInspectorComponent do
     </div>
     """
   end
+
   defp follow_indicator(assigns), do: ~H""
 
   # --- Tab content delegation ---
@@ -198,7 +201,8 @@ defmodule LoomkinWeb.ContextInspectorComponent do
     <.live_component
       module={LoomkinWeb.DecisionGraphComponent}
       id="inspector-graph"
-      session_id={@team_id}
+      session_id={@session_id}
+      team_id={@team_id}
     />
     """
   end
@@ -223,13 +227,16 @@ defmodule LoomkinWeb.ContextInspectorComponent do
   # --- Styling helpers ---
 
   defp panel_class(true = _collapsed),
-    do: "w-10 flex flex-col h-full bg-gray-900/50 border-l border-gray-800 transition-all duration-200"
+    do:
+      "w-full h-12 xl:w-10 xl:h-full flex flex-col bg-gray-900/50 border-t xl:border-t-0 xl:border-l border-gray-800 transition-all duration-200"
 
   defp panel_class(false = _collapsed),
-    do: "w-80 flex flex-col h-full bg-gray-900/50 border-l border-gray-800 transition-all duration-200"
+    do:
+      "w-full h-[18rem] xl:w-80 xl:h-full flex flex-col bg-gray-900/50 border-t xl:border-t-0 xl:border-l border-gray-800 transition-all duration-200"
 
   defp tab_button_class(active, tab) do
-    base = "flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-all duration-200 "
+    base =
+      "flex shrink-0 items-center gap-1.5 whitespace-nowrap px-3 py-1.5 text-xs font-medium rounded-lg transition-all duration-200 "
 
     if active == tab do
       base <> "bg-gray-800 text-violet-400"

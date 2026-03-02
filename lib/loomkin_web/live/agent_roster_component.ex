@@ -49,7 +49,7 @@ defmodule LoomkinWeb.AgentRosterComponent do
   @impl true
   def render(assigns) do
     ~H"""
-    <div class="flex flex-col h-full w-56 bg-gray-950 border-r border-gray-800">
+    <div class="flex h-56 w-full flex-col border-b border-gray-800 bg-gray-950 xl:h-full xl:w-56 xl:border-b-0 xl:border-r">
       <%!-- Team Header --%>
       <div class="px-3 py-3 border-b border-gray-800 flex items-center justify-between">
         <span class="text-sm font-semibold text-violet-400 truncate">{@team_id}</span>
@@ -78,7 +78,8 @@ defmodule LoomkinWeb.AgentRosterComponent do
           >
             <%!-- Row 1: status dot + name + role badge --%>
             <div class="flex items-center gap-2">
-              <span class={"w-2 h-2 rounded-full flex-shrink-0 #{status_dot_class(agent.status)}"}></span>
+              <span class={"w-2 h-2 rounded-full flex-shrink-0 #{status_dot_class(agent.status)}"}>
+              </span>
               <span
                 class="text-sm font-medium truncate flex-1"
                 style={"color: #{agent_color(agent.name)}"}
@@ -196,9 +197,7 @@ defmodule LoomkinWeb.AgentRosterComponent do
 
   defp task_status_icon(:in_progress),
     do:
-      Phoenix.HTML.raw(
-        ~s(<span class="text-violet-400 animate-spin inline-block">&#9684;</span>)
-      )
+      Phoenix.HTML.raw(~s(<span class="text-violet-400 animate-spin inline-block">&#9684;</span>))
 
   defp task_status_icon(:assigned),
     do: Phoenix.HTML.raw(~s(<span class="text-blue-400">&#8594;</span>))

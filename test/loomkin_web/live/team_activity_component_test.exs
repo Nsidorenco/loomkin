@@ -34,11 +34,15 @@ defmodule LoomkinWeb.TeamActivityComponentTest do
 
       assert html =~ "tool"
       assert html =~ "message"
-      assert html =~ "decision"
+      assert html =~ "created"
       assert html =~ "done"
       assert html =~ "assigned"
       assert html =~ "discovery"
       assert html =~ "error"
+      assert html =~ "thinking"
+      assert html =~ "joined"
+      assert html =~ "offload"
+      assert html =~ "question"
     end
   end
 

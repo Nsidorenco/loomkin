@@ -4,6 +4,8 @@
 
 # Loomkin
 
+[![Discord](https://img.shields.io/discord/1234567890?color=5865F2&logo=discord&logoColor=white&label=Discord)](https://discord.gg/WUVneqArVD)
+
 **The AI coding assistant with a nervous system.**
 
 Every session is a team. One agent or twenty — the architecture is the same. Context is never lost. Agents communicate in microseconds. Cheap models in swarms outperform expensive models solo.

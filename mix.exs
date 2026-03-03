@@ -11,7 +11,6 @@ defmodule Loomkin.MixProject do
       start_permanent: Mix.env() == :prod,
       aliases: aliases(),
       deps: deps(),
-      escript: escript(),
       releases: releases(),
       elixirc_paths: elixirc_paths(Mix.env()),
       listeners: [Phoenix.CodeReloader]
@@ -27,13 +26,6 @@ defmodule Loomkin.MixProject do
 
   defp elixirc_paths(:test), do: ["lib", "test/support"]
   defp elixirc_paths(_), do: ["lib"]
-
-  # Escript is for development convenience only (e.g. `mix escript.build && ./loomkin`).
-  # It cannot bundle NIFs (exqlite) or priv dirs (tzdata), so it will show an error
-  # at startup directing users to `mix release`. See issues #39 / #43.
-  defp escript do
-    [main_module: LoomkinCli.Main]
-  end
 
   defp releases do
     [

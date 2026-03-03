@@ -38,8 +38,9 @@ npm-debug.log
 .env
 .env.*
 
-# Escript binary
+# Build artifacts
 /loomkin
+
 /.specstory
 /.history
 /.expert

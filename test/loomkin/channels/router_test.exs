@@ -1,7 +1,11 @@
 defmodule Loomkin.Channels.RouterTest do
-  use ExUnit.Case, async: false
+  use Loomkin.DataCase, async: false
+
+  import Mox
 
   alias Loomkin.Channels.Router
+
+  setup :verify_on_exit!
 
   setup do
     # Ensure Config is started for ACL tests
@@ -10,6 +14,14 @@ defmodule Loomkin.Channels.RouterTest do
     catch
       :error, {:already_started, _} -> :ok
     end
+
+    # Clear ACL to allow all by default
+    Loomkin.Config.put(:channels, %{
+      telegram: %{allowed_chat_ids: [], allow_user_ids: []},
+      discord: %{guild_ids: [], allow_user_ids: []}
+    })
+
+    Mox.set_mox_global()
 
     :ok
   end
@@ -129,6 +141,61 @@ defmodule Loomkin.Channels.RouterTest do
 
     test "parses /cost without arguments" do
       assert {:command, "cost", ""} = Router.parse_command("/cost")
+    end
+
+    test "parses /approve with request_id and action" do
+      assert {:command, "approve", "req-1 once"} = Router.parse_command("/approve req-1 once")
+    end
+  end
+
+  describe "handle_inbound/4 with Mox" do
+    test "routes commands through parse_command" do
+      stub(Loomkin.MockAdapter, :parse_inbound, fn _raw ->
+        {:message, "/status", %{}}
+      end)
+
+      # /status without a binding returns a help message
+      result = Router.handle_inbound(Loomkin.MockAdapter, :telegram, "chat-1", %{})
+      assert {:ok, text} = result
+      assert text =~ "No active binding"
+    end
+
+    test "ACL blocks disallowed channels" do
+      Loomkin.Config.put(:channels, %{telegram: %{allowed_chat_ids: [999], allow_user_ids: []}})
+
+      assert {:error, :channel_not_allowed} =
+               Router.handle_inbound(Loomkin.MockAdapter, :telegram, "111", %{})
+    end
+
+    test "ignores events when adapter returns :ignore" do
+      stub(Loomkin.MockAdapter, :parse_inbound, fn _raw -> :ignore end)
+
+      assert {:ok, :ignored} = Router.handle_inbound(Loomkin.MockAdapter, :telegram, "chat-1", %{})
+    end
+
+    test "returns unknown command help for unrecognized commands" do
+      stub(Loomkin.MockAdapter, :parse_inbound, fn _raw ->
+        {:message, "/foobar", %{}}
+      end)
+
+      assert {:ok, text} = Router.handle_inbound(Loomkin.MockAdapter, :telegram, "chat-1", %{})
+      assert text =~ "Unknown command"
+      assert text =~ "/foobar"
+    end
+
+    test "returns :no_binding for messages without a bridge or binding" do
+      stub(Loomkin.MockAdapter, :parse_inbound, fn _raw ->
+        {:message, "hello", %{}}
+      end)
+
+      assert {:error, :no_binding} =
+               Router.handle_inbound(Loomkin.MockAdapter, :telegram, "unbound-chat", %{})
+    end
+  end
+
+  describe "handle_callback/4" do
+    test "returns error when no bridge exists" do
+      assert {:error, :no_binding} = Router.handle_callback(:telegram, "no-bridge", "cb-1", "data")
     end
   end
 end

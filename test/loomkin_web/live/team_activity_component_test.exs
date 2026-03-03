@@ -109,6 +109,17 @@ defmodule LoomkinWeb.TeamActivityComponentTest do
       assert html =~ "Reply to coder"
     end
 
+    test "task_created card hides reply button for system agent" do
+      html = render_with_events([make_event(:task_created, "system", %{metadata: %{title: "Implement feature"}})])
+      refute html =~ "Reply to system"
+    end
+
+    test "task_created card renders title and created label" do
+      html = render_with_events([make_event(:task_created, "system", %{metadata: %{title: "Implement feature"}})])
+      assert html =~ "created"
+      assert html =~ "Implement feature"
+    end
+
     test "task_complete card shows reply button" do
       html = render_with_events([make_event(:task_complete, "coder", %{metadata: %{title: "Fix bug"}})])
       assert html =~ "Reply to coder"
@@ -147,6 +158,143 @@ defmodule LoomkinWeb.TeamActivityComponentTest do
     test "thinking card does not show reply button" do
       html = render_with_events([make_event(:thinking, "coder")])
       refute html =~ "reply_to_agent"
+    end
+  end
+
+  describe "task_assigned card from team_assign" do
+    defp make_task_event(type, agent, opts) do
+      Map.merge(
+        %{
+          id: Ecto.UUID.generate(),
+          type: type,
+          agent: agent,
+          content: "Assigned task to researcher",
+          timestamp: DateTime.utc_now(),
+          expanded: false,
+          metadata: Map.get(opts, :metadata, %{})
+        },
+        opts
+      )
+    end
+
+    defp render_task_events(events) do
+      render_component(LoomkinWeb.TeamActivityComponent, %{
+        id: "test-activity",
+        team_id: @team_id,
+        events: events,
+        known_agents: Enum.map(events, & &1.agent) |> Enum.uniq()
+      })
+    end
+
+    test "task_assigned card shows title and owner from metadata" do
+      event =
+        make_task_event(:task_assigned, "lead", %{
+          metadata: %{title: "Fix login bug", owner: "researcher", priority: "2", status: "assigned"}
+        })
+
+      html = render_task_events([event])
+      assert html =~ "assigned"
+      assert html =~ "Fix login bug"
+      assert html =~ "researcher"
+    end
+
+    test "task_assigned card shows assigned label badge" do
+      event =
+        make_task_event(:task_assigned, "lead", %{
+          metadata: %{title: "Write tests", owner: "coder"}
+        })
+
+      html = render_task_events([event])
+      assert html =~ "bg-blue-400/20"
+      assert html =~ "assigned"
+    end
+  end
+
+  describe "expand/collapse persistence" do
+    defp make_expandable_event(type, agent, opts) do
+      Map.merge(
+        %{
+          id: Ecto.UUID.generate(),
+          type: type,
+          agent: agent,
+          content: "test content",
+          timestamp: DateTime.utc_now(),
+          metadata: Map.get(opts, :metadata, %{})
+        },
+        opts
+      )
+    end
+
+    defp render_expand_events(events) do
+      render_component(LoomkinWeb.TeamActivityComponent, %{
+        id: "test-activity",
+        team_id: @team_id,
+        events: events,
+        known_agents: Enum.map(events, & &1.agent) |> Enum.uniq()
+      })
+    end
+
+    test "tool_call card with long result renders collapsed by default" do
+      long_result = String.duplicate("x", 600)
+
+      event =
+        make_expandable_event(:tool_call, "coder", %{
+          metadata: %{tool_name: "Read", result: long_result}
+        })
+
+      html = render_expand_events([event])
+
+      assert html =~ "Show full result"
+      refute html =~ "Collapse"
+    end
+
+    test "tool_call card with short result does not show expand button" do
+      event =
+        make_expandable_event(:tool_call, "coder", %{
+          metadata: %{tool_name: "Read", result: "short"}
+        })
+
+      html = render_expand_events([event])
+
+      refute html =~ "Show full result"
+      refute html =~ "Collapse"
+    end
+
+    test "task_complete card with result shows expand button" do
+      event =
+        make_expandable_event(:task_complete, "coder", %{
+          metadata: %{title: "Fix bug", result: "All tests pass"}
+        })
+
+      html = render_expand_events([event])
+
+      assert html =~ "Show result"
+    end
+
+    test "error card with details shows expand button" do
+      event =
+        make_expandable_event(:error, "coder", %{
+          metadata: %{details: "Stack trace here..."}
+        })
+
+      html = render_expand_events([event])
+
+      assert html =~ "Show details"
+    end
+
+    test "events do not carry expanded field — state lives in component" do
+      # Events without an :expanded key should render fine (no KeyError)
+      event = %{
+        id: Ecto.UUID.generate(),
+        type: :tool_call,
+        agent: "coder",
+        content: "used Read",
+        timestamp: DateTime.utc_now(),
+        metadata: %{tool_name: "Read", result: String.duplicate("x", 600)}
+      }
+
+      html = render_expand_events([event])
+      assert html =~ "Show full result"
     end
   end
 end

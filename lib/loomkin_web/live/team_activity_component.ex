@@ -52,18 +52,27 @@ defmodule LoomkinWeb.TeamActivityComponent do
        known_agents: [],
        focused_agent: nil,
        agent_filter: nil,
-       type_filter: MapSet.new()
+       type_filter: MapSet.new(),
+       expanded_ids: MapSet.new()
      )}
   end
 
   @impl true
   def update(assigns, socket) do
+    events = assigns[:events] || socket.assigns.events
+
+    # Prune expanded_ids for events no longer in the feed
+    expanded_ids = socket.assigns.expanded_ids
+    event_ids = MapSet.new(events, & &1.id)
+    expanded_ids = MapSet.intersection(expanded_ids, event_ids)
+
     socket =
       socket
       |> assign(:team_id, assigns[:team_id])
       |> assign(:id, assigns[:id])
-      |> assign(:events, assigns[:events] || socket.assigns.events)
+      |> assign(:events, events)
       |> assign(:known_agents, assigns[:known_agents] || socket.assigns.known_agents)
+      |> assign(:expanded_ids, expanded_ids)
 
     # Accept focused_agent from parent (e.g. roster click) — auto-apply as agent filter
     socket =
@@ -101,12 +110,14 @@ defmodule LoomkinWeb.TeamActivityComponent do
   end
 
   def handle_event("expand_event", %{"id" => id}, socket) do
-    events =
-      Enum.map(socket.assigns.events, fn event ->
-        if event.id == id, do: Map.update(event, :expanded, true, &(!&1)), else: event
-      end)
+    expanded_ids = socket.assigns.expanded_ids
 
-    {:noreply, assign(socket, events: events)}
+    expanded_ids =
+      if MapSet.member?(expanded_ids, id),
+        do: MapSet.delete(expanded_ids, id),
+        else: MapSet.put(expanded_ids, id)
+
+    {:noreply, assign(socket, expanded_ids: expanded_ids)}
   end
 
   def handle_event("focus_agent", %{"agent" => agent}, socket) do
@@ -196,7 +207,7 @@ defmodule LoomkinWeb.TeamActivityComponent do
     file_path = meta[:file_path]
     result_preview = meta[:result] || meta[:result_preview]
     has_result = is_binary(result_preview) and result_preview != ""
-    expanded = Map.get(event, :expanded, false)
+    expanded = MapSet.member?(assigns.expanded_ids, event.id)
 
     assigns =
       assigns
@@ -314,7 +325,7 @@ defmodule LoomkinWeb.TeamActivityComponent do
     title = meta[:title]
     owner = meta[:owner]
     result = meta[:result]
-    expanded = Map.get(event, :expanded, false)
+    expanded = MapSet.member?(assigns.expanded_ids, event.id)
 
     assigns =
       assigns
@@ -442,7 +453,7 @@ defmodule LoomkinWeb.TeamActivityComponent do
   defp render_event_card(assigns, %{type: :error} = event) do
     meta = Map.get(event, :metadata, %{})
     details = meta[:details]
-    expanded = Map.get(event, :expanded, false)
+    expanded = MapSet.member?(assigns.expanded_ids, event.id)
 
     assigns =
       assigns
@@ -692,7 +703,7 @@ defmodule LoomkinWeb.TeamActivityComponent do
   # Fallback for any unknown event type
   defp render_event_card(assigns, event) do
     config = Map.get(@type_config, event.type, %{label: to_string(event.type), bg: "bg-gray-400/20", text: "text-gray-400", border: "border-gray-500/40"})
-    expanded = Map.get(event, :expanded, false)
+    expanded = MapSet.member?(assigns.expanded_ids, event.id)
 
     assigns =
       assigns

@@ -32,7 +32,8 @@ hljs.registerLanguage("diff", diff)
 
 let Hooks = {}
 
-// ShiftEnterSubmit: submits the form on Enter, allows Shift+Enter for newlines
+// ShiftEnterSubmit: submits the form on Enter, allows Shift+Enter for newlines,
+// and auto-resizes the textarea as the user types.
 Hooks.ShiftEnterSubmit = {
   mounted() {
     this.el.addEventListener("keydown", (e) => {
@@ -44,10 +45,26 @@ Hooks.ShiftEnterSubmit = {
       }
     })
 
+    // Auto-resize on input
+    this.el.addEventListener("input", () => this.resize())
+    this.resize()
+
+    // Focus input when server pushes focus-input event
+    this.handleEvent("focus-input", () => {
+      this.el.focus()
+    })
+
     // Clear input when server pushes clear-input event
     this.handleEvent("clear-input", () => {
       this.el.value = ""
+      this.el.style.height = "auto"
+      this.resize()
     })
+  },
+  resize() {
+    this.el.style.height = "auto"
+    const maxHeight = 160 // ~6 lines
+    this.el.style.height = Math.min(this.el.scrollHeight, maxHeight) + "px"
   }
 }
 
@@ -101,22 +118,18 @@ Hooks.TabTransition = {
 // and paste-back OAuth flow initiation
 Hooks.ModelSelector = {
   mounted() {
-    // Close on Escape
     this._onKeydown = (e) => {
       if (e.key === "Escape") {
         this.pushEventTo(this.el, "close_dropdown", {})
       }
-      // Keyboard navigation within model list
       if (e.key === "ArrowDown" || e.key === "ArrowUp") {
         const list = this.el.querySelector("#model-list")
         if (!list) return
         const items = Array.from(list.querySelectorAll("button[phx-click='select_model']"))
         if (items.length === 0) return
-
         e.preventDefault()
         const focused = list.querySelector("button:focus")
         let idx = items.indexOf(focused)
-
         if (e.key === "ArrowDown") {
           idx = idx < items.length - 1 ? idx + 1 : 0
         } else {
@@ -128,9 +141,7 @@ Hooks.ModelSelector = {
         const list = this.el.querySelector("#model-list")
         if (!list) return
         const focused = list.querySelector("button:focus")
-        if (focused) {
-          focused.click()
-        }
+        if (focused) focused.click()
       }
     }
     document.addEventListener("keydown", this._onKeydown)

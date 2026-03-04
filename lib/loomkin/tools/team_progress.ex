@@ -10,6 +10,8 @@ defmodule Loomkin.Tools.TeamProgress do
       team_id: [type: :string, required: true, doc: "Team ID"]
     ]
 
+  require Logger
+
   import Loomkin.Tool, only: [param!: 2]
 
   alias Loomkin.Teams.{Context, Manager, RateLimiter, Tasks}
@@ -18,18 +20,23 @@ defmodule Loomkin.Tools.TeamProgress do
   def run(params, _context) do
     team_id = param!(params, :team_id)
 
-    agents = Manager.list_agents(team_id)
+    agents = safe_list_agents(team_id)
     tasks = Tasks.list_all(team_id)
     claims = Context.list_all_claims(team_id)
     budget = RateLimiter.get_budget(team_id)
 
     agents_section =
-      if agents == [] do
-        "  (none)"
-      else
-        Enum.map_join(agents, "\n", fn a ->
-          "  - #{a.name} (#{a.role}): #{a.status}"
-        end)
+      case agents do
+        :error ->
+          "  (unavailable — check logs)"
+
+        [] ->
+          "  (none)"
+
+        agents ->
+          Enum.map_join(agents, "\n", fn a ->
+            "  - #{Map.get(a, :name, "?")} (#{Map.get(a, :role, "?")}): #{Map.get(a, :status, "?")}"
+          end)
       end
 
     tasks_section =
@@ -71,5 +78,13 @@ defmodule Loomkin.Tools.TeamProgress do
     """
 
     {:ok, %{result: String.trim(summary)}}
+  end
+
+  defp safe_list_agents(team_id) do
+    Manager.list_agents(team_id)
+  rescue
+    e ->
+      Logger.warning("list_agents failed for team #{team_id}: #{Exception.message(e)}")
+      :error
   end
 end

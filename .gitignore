@@ -47,3 +47,8 @@ npm-debug.log
 /.claude
 /.cursorindexingignore
 /.loomkin.toml
+
+# Deciduous (local tooling, not part of the project)
+.deciduous/
+docs/graph-data.json
+docs/.nojekyll

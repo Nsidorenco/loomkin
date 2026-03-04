@@ -1479,7 +1479,7 @@ defmodule LoomkinWeb.WorkspaceLive do
         module={LoomkinWeb.TeamActivityComponent}
         id="activity-feed"
         team_id={@active_team_id}
-        events={@activity_events}
+        events={filter_high_signal_events(@activity_events)}
         known_agents={@activity_known_agents}
         focused_agent={@focused_agent}
       />
@@ -1490,6 +1490,15 @@ defmodule LoomkinWeb.WorkspaceLive do
           module={LoomkinWeb.AskUserComponent}
           id="ask-user-questions"
           questions={@pending_questions}
+        />
+      </div>
+
+      <%!-- Collapsible tool calls feed --%>
+      <div class="flex-shrink-0">
+        <.live_component
+          module={LoomkinWeb.ToolCallsComponent}
+          id="tool-calls-feed"
+          events={@activity_events}
         />
       </div>
 
@@ -2280,6 +2289,14 @@ defmodule LoomkinWeb.WorkspaceLive do
   end
 
   defp activity_event_from(_), do: nil
+
+  # Filter out low-signal events from the primary activity feed.
+  # Tool calls and context offloads go to the collapsible ToolCallsComponent instead.
+  @low_signal_event_types [:tool_call, :context_offload]
+
+  defp filter_high_signal_events(events) do
+    Enum.reject(events, fn event -> event.type in @low_signal_event_types end)
+  end
 
   # --- Human-readable tool descriptions ---
 

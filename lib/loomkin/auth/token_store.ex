@@ -370,8 +370,11 @@ defmodule Loomkin.Auth.TokenStore do
       Logger.debug("Scheduled token refresh for #{provider} in #{refresh_in}s")
       {:ok, timer_ref}
     else
-      Logger.warning("Token for #{provider} already expired, not scheduling refresh")
-      :no_refresh
+      # Token already expired — attempt an immediate refresh (the handler
+      # will use the cached refresh_token from ETS if one exists)
+      Logger.info("Token for #{provider} already expired, scheduling immediate refresh")
+      timer_ref = Process.send_after(self(), {:refresh_token, provider}, 1_000)
+      {:ok, timer_ref}
     end
   end
 

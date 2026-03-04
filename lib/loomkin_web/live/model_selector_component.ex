@@ -21,18 +21,21 @@ defmodule LoomkinWeb.ModelSelectorComponent do
   end
 
   def update(assigns, socket) do
-    # Only re-fetch providers when the model actually changes
+    # Re-fetch providers when the model changes OR auth status changes
     socket = assign(socket, assigns)
 
     old_model = socket.assigns[:prev_model]
     new_model = assigns[:model]
+    old_auth = socket.assigns[:prev_auth_version]
+    new_auth = assigns[:auth_version]
 
-    if old_model != new_model do
+    if old_model != new_model or (new_auth != nil and old_auth != new_auth) do
       {active, unconfigured, all} = load_providers()
 
       {:ok,
        assign(socket,
          prev_model: new_model,
+         prev_auth_version: new_auth,
          active_providers: active,
          unconfigured_providers: unconfigured,
          all_providers: all

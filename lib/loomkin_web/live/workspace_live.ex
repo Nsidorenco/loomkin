@@ -1386,13 +1386,6 @@ defmodule LoomkinWeb.WorkspaceLive do
             </span>
           </div>
 
-          <%!-- Model selector --%>
-          <.live_component
-            module={LoomkinWeb.ModelSelectorComponent}
-            id="model-selector"
-            model={@model}
-          />
-
           {render_header_channel_badges(assigns)}
           <select
             :if={@child_teams != []}
@@ -1961,12 +1954,17 @@ defmodule LoomkinWeb.WorkspaceLive do
   end
 
   defp send_update_to_model_selector(socket) do
+    # Bump auth_version so the component knows to reload providers,
+    # even when the model string hasn't changed
+    auth_version = (socket.assigns[:auth_version] || 0) + 1
+
     send_update(LoomkinWeb.ModelSelectorComponent,
       id: "model-selector",
-      model: socket.assigns.model
+      model: socket.assigns.model,
+      auth_version: auth_version
     )
 
-    socket
+    assign(socket, auth_version: auth_version)
   end
 
   # Recompute cached roster data and ensure child team subscriptions are active.

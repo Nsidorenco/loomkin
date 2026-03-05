@@ -29,6 +29,7 @@ defmodule Loomkin.Decisions.Broadcaster do
     team_id = Keyword.fetch!(opts, :team_id)
 
     Phoenix.PubSub.subscribe(@pubsub, "decision_graph")
+    Phoenix.PubSub.subscribe(@pubsub, "decision_graph:#{team_id}")
 
     state = %{
       team_id: team_id,

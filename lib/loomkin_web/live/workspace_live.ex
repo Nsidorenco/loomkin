@@ -1427,6 +1427,16 @@ defmodule LoomkinWeb.WorkspaceLive do
     {:noreply, socket |> forward_to_activity(event) |> forward_to_cards_and_comms(event)}
   end
 
+  def handle_info({:node_added, _node}, socket) do
+    refresh_decision_graphs(socket)
+    {:noreply, socket}
+  end
+
+  def handle_info({:pivot_created, _result}, socket) do
+    refresh_decision_graphs(socket)
+    {:noreply, socket}
+  end
+
   def handle_info({:context_update, _from_agent, _payload} = event, socket) do
     {:noreply, socket |> forward_to_activity(event) |> forward_to_cards_and_comms(event)}
   end
@@ -2514,6 +2524,7 @@ defmodule LoomkinWeb.WorkspaceLive do
       Phoenix.PubSub.subscribe(Loomkin.PubSub, "team:#{team_id}:tasks")
       Phoenix.PubSub.subscribe(Loomkin.PubSub, "team:#{team_id}:context")
       Phoenix.PubSub.subscribe(Loomkin.PubSub, "team:#{team_id}:decisions")
+      Phoenix.PubSub.subscribe(Loomkin.PubSub, "decision_graph:#{team_id}")
 
       socket = assign(socket, subscribed_teams: MapSet.put(subscribed, team_id))
 
@@ -2574,6 +2585,20 @@ defmodule LoomkinWeb.WorkspaceLive do
   # NOTE: Do NOT subscribe to PubSub topics here — this is called from many
   # event handlers and PubSub.subscribe is not idempotent (each call adds
   # another subscription, causing duplicate event delivery).
+  defp refresh_decision_graphs(socket) do
+    send_update(LoomkinWeb.DecisionGraphComponent,
+      id: "decision-graph",
+      session_id: socket.assigns[:session_id],
+      team_id: socket.assigns[:active_team_id]
+    )
+
+    send_update(LoomkinWeb.DecisionGraphComponent,
+      id: "team-decision-graph",
+      session_id: socket.assigns[:session_id],
+      team_id: socket.assigns[:display_team_id]
+    )
+  end
+
   defp refresh_roster(socket) do
     team_id = socket.assigns[:active_team_id]
     agents = roster_agents(team_id)

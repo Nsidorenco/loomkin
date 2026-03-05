@@ -1396,6 +1396,7 @@ defmodule Loomkin.Teams.Agent do
       project_path_resolver: project_path_resolver,
       agent_name: state.name,
       team_id: state.team_id,
+      session_id: state.team_id,
       check_permission: permission_callback,
       checkpoint: checkpoint_callback,
       rate_limiter: fn provider ->

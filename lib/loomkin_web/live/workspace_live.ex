@@ -68,7 +68,8 @@ defmodule LoomkinWeb.WorkspaceLive do
         # Cached roster data (recomputed on roster_version changes, not per render)
         cached_agents: [],
         cached_tasks: [],
-        cached_budget: %{spent: 0.0, limit: 5.0}
+        cached_budget: %{spent: 0.0, limit: 5.0},
+        last_user_message: nil
       )
 
     project_path = File.cwd!()
@@ -268,7 +269,12 @@ defmodule LoomkinWeb.WorkspaceLive do
 
             {:noreply,
              socket
-             |> assign(input_text: "", reply_target: nil, activity_events: events)
+             |> assign(
+               input_text: "",
+               reply_target: nil,
+               activity_events: events,
+               last_user_message: %{text: trimmed, to: agent_name}
+             )
              |> push_event("clear-input", %{})}
 
           :error ->
@@ -302,7 +308,8 @@ defmodule LoomkinWeb.WorkspaceLive do
              |> assign(
                input_text: "",
                reply_target: nil,
-               activity_events: events
+               activity_events: events,
+               last_user_message: %{text: trimmed, to: agent_name}
              )
              |> push_event("clear-input", %{})}
 
@@ -374,7 +381,8 @@ defmodule LoomkinWeb.WorkspaceLive do
            input_text: "",
            async_task: task,
            status: :thinking,
-           messages: updated_messages
+           messages: updated_messages,
+           last_user_message: %{text: trimmed, to: "Team"}
          )
          |> push_event("clear-input", %{})}
     end
@@ -2236,6 +2244,9 @@ defmodule LoomkinWeb.WorkspaceLive do
       <%!-- Budget bar --%>
       {render_budget_bar(assigns)}
 
+      <%!-- Last user message echo --%>
+      {render_last_message_strip(assigns)}
+
       <%!-- Sticky composer --%>
       {render_input_bar(assigns)}
     </div>
@@ -2321,6 +2332,38 @@ defmodule LoomkinWeb.WorkspaceLive do
   defp format_decimal_cost(n) when is_float(n), do: :erlang.float_to_binary(n, decimals: 2)
   defp format_decimal_cost(n) when is_integer(n), do: "#{n}.00"
   defp format_decimal_cost(_), do: "0.00"
+
+  defp render_last_message_strip(%{last_user_message: nil} = assigns) do
+    ~H""
+  end
+
+  defp render_last_message_strip(assigns) do
+    ~H"""
+    <div
+      class="flex-shrink-0 px-4 py-1.5 flex items-center gap-2 overflow-hidden"
+      style="border-top: 1px solid var(--border-subtle); background: var(--surface-1);"
+    >
+      <span class="text-[10px] font-semibold text-muted uppercase tracking-widest flex-shrink-0">
+        You
+      </span>
+      <span class="text-[10px] flex-shrink-0" style="color: var(--text-muted);">
+        &rarr;
+      </span>
+      <span
+        class="text-[10px] font-medium flex-shrink-0"
+        style="color: var(--brand);"
+      >
+        {@last_user_message.to}
+      </span>
+      <span
+        class="text-[11px] truncate flex-1 min-w-0"
+        style="color: var(--text-secondary);"
+      >
+        {@last_user_message.text}
+      </span>
+    </div>
+    """
+  end
 
   # --- Shared input bar (used by both modes) ---
 

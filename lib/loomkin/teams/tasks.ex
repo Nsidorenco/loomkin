@@ -156,12 +156,14 @@ defmodule Loomkin.Teams.Tasks do
   end
 
   @doc "List tasks from sibling teams for cross-team visibility."
-  def list_cross_team_tasks(team_id) do
+  def list_cross_team_tasks(team_id, opts \\ []) do
+    limit = Keyword.get(opts, :limit, 50)
+
     case Loomkin.Teams.Manager.get_sibling_teams(team_id) do
       {:ok, siblings} ->
-        Enum.flat_map(siblings, fn sib_id ->
-          list_all(sib_id)
-        end)
+        siblings
+        |> Enum.flat_map(fn sib_id -> list_all(sib_id) end)
+        |> Enum.take(limit)
 
       :none ->
         []

@@ -12,8 +12,8 @@ defmodule Loomkin.Tools.CrossTeamQuery do
       target_team: [
         type: :string,
         doc:
-          "Target team ID. If omitted, defaults to the parent team. " <>
-            "Use list_teams to discover team IDs."
+          "Target team ID. Use list_teams to discover available teams. " <>
+            "Defaults to parent team if omitted."
       ],
       question: [type: :string, required: true, doc: "The question to ask"],
       target_agent: [type: :string, doc: "Specific agent to ask (omit to broadcast to all)"]

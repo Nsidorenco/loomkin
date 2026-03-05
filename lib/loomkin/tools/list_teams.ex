@@ -33,9 +33,9 @@ defmodule Loomkin.Tools.ListTeams do
     end
   end
 
-  defp build_sections(team_id, "parent"), do: [parent_section(team_id)] |> reject_nil()
-  defp build_sections(team_id, "siblings"), do: [siblings_section(team_id)] |> reject_nil()
-  defp build_sections(team_id, "children"), do: [children_section(team_id)] |> reject_nil()
+  defp build_sections(team_id, "parent"), do: reject_nil([parent_section(team_id)])
+  defp build_sections(team_id, "siblings"), do: reject_nil([siblings_section(team_id)])
+  defp build_sections(team_id, "children"), do: reject_nil([children_section(team_id)])
 
   defp build_sections(team_id, _all) do
     [

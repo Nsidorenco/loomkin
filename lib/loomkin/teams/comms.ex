@@ -92,13 +92,9 @@ defmodule Loomkin.Teams.Comms do
     end
   end
 
-  @doc "Send a direct message to an agent in any team (cross-team unicast)."
+  @doc "Send a message to an agent in any team. Alias for `send_to/3` that signals cross-boundary intent."
   def send_cross_team(target_team_id, target_agent, message) do
-    Phoenix.PubSub.broadcast(
-      @pubsub,
-      "team:#{target_team_id}:agent:#{target_agent}",
-      message
-    )
+    send_to(target_team_id, target_agent, message)
   end
 
   @doc "Broadcast a message to all child teams."
@@ -144,6 +140,7 @@ defmodule Loomkin.Teams.Comms do
   @propagatable_types ~w[insight blocker discovery warning]
 
   defp maybe_propagate_to_parent(team_id, %{from: from} = payload) do
+    # payload[:type] may be atom or string depending on caller
     type = to_string(payload[:type] || "")
 
     if type in @propagatable_types do

@@ -596,8 +596,17 @@ defmodule Loomkin.Teams.Agent do
 
   @impl true
   def handle_info({:query, query_id, from, question, enrichments}, state) do
-    # Don't process our own broadcast questions
-    if from == to_string(state.name) do
+    # Don't process our own broadcast questions — but allow cross-team queries
+    # even when agent names match (e.g., two "lead" agents in sibling teams)
+    same_name? = from == to_string(state.name)
+
+    same_team? =
+      case enrichments do
+        %{source_team: source_team} -> source_team == state.team_id
+        _ -> true
+      end
+
+    if same_name? and same_team? do
       {:noreply, state}
     else
       # enrichments can be a list (intra-team) or a map with :source_team (cross-team)

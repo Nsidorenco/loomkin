@@ -5,14 +5,15 @@ defmodule Loomkin.Teams.CrossTeamTest do
   alias Loomkin.Teams.Manager
 
   setup do
+    pid = Ecto.Adapters.SQL.Sandbox.start_owner!(Loomkin.Repo, shared: true)
+    on_exit(fn -> Ecto.Adapters.SQL.Sandbox.stop_owner(pid) end)
+
     {:ok, parent_id} = Manager.create_team(name: "cross-parent")
     {:ok, child_a} = Manager.create_sub_team(parent_id, "lead", name: "cross-child-a")
     {:ok, child_b} = Manager.create_sub_team(parent_id, "lead", name: "cross-child-b")
 
     on_exit(fn ->
-      Loomkin.Teams.TableRegistry.delete_table(child_b)
-      Loomkin.Teams.TableRegistry.delete_table(child_a)
-      Loomkin.Teams.TableRegistry.delete_table(parent_id)
+      Loomkin.Teams.Manager.dissolve_team(parent_id)
     end)
 
     %{parent_id: parent_id, child_a: child_a, child_b: child_b}
@@ -201,6 +202,37 @@ defmodule Loomkin.Teams.CrossTeamTest do
 
     test "broadcast_to_siblings returns :ok for root team", %{parent_id: parent_id} do
       assert :ok = Comms.broadcast_to_siblings(parent_id, {:msg, "no siblings"})
+    end
+  end
+
+  describe "cross-team tasks" do
+    test "list_cross_team_tasks returns tasks from sibling teams", %{
+      child_a: child_a,
+      child_b: child_b
+    } do
+      alias Loomkin.Teams.Tasks
+
+      {:ok, _task} = Tasks.create_task(child_b, %{title: "Sibling task", description: "test"})
+
+      tasks = Tasks.list_cross_team_tasks(child_a)
+      assert length(tasks) >= 1
+      assert Enum.any?(tasks, fn t -> t.title == "Sibling task" end)
+    end
+
+    test "list_cross_team_tasks respects limit", %{child_a: child_a, child_b: child_b} do
+      alias Loomkin.Teams.Tasks
+
+      for i <- 1..5 do
+        {:ok, _} = Tasks.create_task(child_b, %{title: "Task #{i}", description: "test"})
+      end
+
+      tasks = Tasks.list_cross_team_tasks(child_a, limit: 3)
+      assert length(tasks) == 3
+    end
+
+    test "list_cross_team_tasks returns empty for root team", %{parent_id: parent_id} do
+      alias Loomkin.Teams.Tasks
+      assert [] = Tasks.list_cross_team_tasks(parent_id)
     end
   end
 

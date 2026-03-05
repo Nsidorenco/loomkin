@@ -174,9 +174,11 @@ defmodule Loomkin.Session do
     case load_or_create_session(session_id, model, project_path, title) do
       {:ok, db_session, messages} ->
         # Prefer the DB-persisted model for resumed sessions so the user's
-        # last selection survives page refreshes.
-        effective_model = db_session.model || model
-        effective_fast_model = db_session.fast_model || fast_model || effective_model
+        # last selection survives page refreshes — but only if the provider
+        # is actually available (has API key or OAuth). Stale sessions may
+        # reference providers the user never configured.
+        effective_model = validate_model(db_session.model, model)
+        effective_fast_model = validate_model(db_session.fast_model, fast_model || effective_model)
 
         state = %__MODULE__{
           id: db_session.id,
@@ -540,6 +542,32 @@ defmodule Loomkin.Session do
 
   defp default_model do
     Application.get_env(:loomkin, :default_model, "zai:glm-5")
+  end
+
+  # Validate a persisted model string — fall back if the provider isn't available.
+  defp validate_model(nil, fallback), do: fallback
+
+  defp validate_model(model, fallback) when is_binary(model) do
+    case String.split(model, ":", parts: 2) do
+      [provider, _model_id] ->
+        provider_atom = String.to_existing_atom(provider)
+
+        case Loomkin.Models.api_key_status(provider_atom) do
+          {:set, _} -> model
+          {:oauth, :connected} -> model
+          _ ->
+            Logger.warning("[Session] Persisted model #{model} unavailable — falling back to #{fallback}")
+            fallback
+        end
+
+      _ ->
+        model
+    end
+  rescue
+    ArgumentError ->
+      # Provider atom doesn't exist — unknown provider
+      Logger.warning("[Session] Unknown provider in model #{model} — falling back to #{fallback}")
+      fallback
   end
 
   defp check_child_team_completion(state, _event) do

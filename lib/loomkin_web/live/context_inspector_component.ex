@@ -43,7 +43,16 @@ defmodule LoomkinWeb.ContextInspectorComponent do
     assigns = assign(assigns, :tabs, @tabs)
 
     ~H"""
-    <div class={panel_class(@collapsed)}>
+    <div id="inspector-panel" class={panel_class(@collapsed)} phx-hook="ResizablePanel">
+      <%!-- Drag handle (left edge) --%>
+      <div
+        :if={!@collapsed}
+        id="inspector-resize-handle"
+        class="hidden xl:flex absolute left-0 top-0 bottom-0 w-1 cursor-col-resize z-10 items-center justify-center group hover:bg-violet-500/20 active:bg-violet-500/30"
+        style="transition: background 0.15s;"
+      >
+        <div class="w-0.5 h-8 rounded-full bg-zinc-600 group-hover:bg-violet-400 group-active:bg-violet-400" style="transition: background 0.15s;"></div>
+      </div>
       <%= if @collapsed do %>
         <.collapsed_strip
           tabs={@tabs}
@@ -86,8 +95,20 @@ defmodule LoomkinWeb.ContextInspectorComponent do
         </div>
 
         <%!-- Content area --%>
-        <div class="flex-1 overflow-auto tab-content-enter" style="background: var(--surface-0);">
-          {render_inspector_tab(@active_inspector_tab, assigns)}
+        <div class="flex-1 overflow-auto min-h-0 relative" style="background: var(--surface-0);">
+          <%!-- Decision graph is always mounted (stays subscribed to PubSub) --%>
+          <div class={if @active_inspector_tab == :graph, do: "h-full", else: "hidden"}>
+            <.live_component
+              module={LoomkinWeb.DecisionGraphComponent}
+              id="inspector-graph"
+              session_id={@session_id}
+              team_id={@team_id}
+            />
+          </div>
+          <%!-- Other tabs render on demand --%>
+          <div :if={@active_inspector_tab != :graph} class="tab-content-enter h-full">
+            {render_inspector_tab(@active_inspector_tab, assigns)}
+          </div>
         </div>
       <% end %>
     </div>
@@ -216,16 +237,7 @@ defmodule LoomkinWeb.ContextInspectorComponent do
     """
   end
 
-  defp render_inspector_tab(:graph, assigns) do
-    ~H"""
-    <.live_component
-      module={LoomkinWeb.DecisionGraphComponent}
-      id="inspector-graph"
-      session_id={@session_id}
-      team_id={@team_id}
-    />
-    """
-  end
+  # :graph tab is always-mounted above — no render_inspector_tab clause needed
 
   # --- Styling helpers ---
 
@@ -235,7 +247,7 @@ defmodule LoomkinWeb.ContextInspectorComponent do
 
   defp panel_class(false = _collapsed),
     do:
-      "inspector-panel w-full h-[20rem] xl:w-80 xl:h-full flex flex-col bg-surface-1 transition-all duration-300 ease-in-out"
+      "inspector-panel relative w-full h-[20rem] xl:w-80 xl:h-full flex-shrink-0 flex flex-col bg-surface-1 transition-colors duration-300 ease-in-out"
 
   defp tab_button_class(active, tab) do
     base =

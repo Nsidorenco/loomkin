@@ -342,6 +342,69 @@ Hooks.SyntaxHighlight = {
   }
 }
 
+// ResizablePanel: drag left edge to resize the inspector panel width
+Hooks.ResizablePanel = {
+  mounted() {
+    const handle = this.el.querySelector('#inspector-resize-handle')
+    if (!handle) return
+
+    const MIN_WIDTH = 200
+    const MAX_WIDTH = 900
+    const DEFAULT_WIDTH = 320
+
+    // Restore saved width
+    const saved = localStorage.getItem('inspector-width')
+    if (saved) {
+      this.el.style.width = saved + 'px'
+    } else {
+      this.el.style.width = DEFAULT_WIDTH + 'px'
+    }
+
+    let dragging = false
+    let startX = 0
+    let startWidth = 0
+
+    const onMouseDown = (e) => {
+      e.preventDefault()
+      dragging = true
+      startX = e.clientX
+      startWidth = this.el.getBoundingClientRect().width
+      document.body.style.cursor = 'col-resize'
+      document.body.style.userSelect = 'none'
+    }
+
+    const onMouseMove = (e) => {
+      if (!dragging) return
+      // Panel is on the right, so dragging left = wider
+      const delta = startX - e.clientX
+      const newWidth = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, startWidth + delta))
+      this.el.style.width = newWidth + 'px'
+    }
+
+    const onMouseUp = () => {
+      if (!dragging) return
+      dragging = false
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+      const width = this.el.getBoundingClientRect().width
+      localStorage.setItem('inspector-width', Math.round(width))
+    }
+
+    handle.addEventListener('mousedown', onMouseDown)
+    document.addEventListener('mousemove', onMouseMove)
+    document.addEventListener('mouseup', onMouseUp)
+
+    this._cleanup = () => {
+      handle.removeEventListener('mousedown', onMouseDown)
+      document.removeEventListener('mousemove', onMouseMove)
+      document.removeEventListener('mouseup', onMouseUp)
+    }
+  },
+  destroyed() {
+    if (this._cleanup) this._cleanup()
+  }
+}
+
 // AutoResizeTextarea: auto-grows textarea as user types
 Hooks.AutoResizeTextarea = {
   mounted() {

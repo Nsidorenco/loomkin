@@ -1,0 +1,153 @@
+# Contributing to Loomkin
+
+Welcome! Loomkin is an AI agent orchestration platform built with Elixir, Phoenix LiveView, and PostgreSQL. Whether you're fixing a typo, adding a feature, or just exploring -- we're glad you're here.
+
+Come build with us. The repo is young and moving fast -- exciting times.
+
+## Philosophy
+
+**Use whatever tools make you effective.** AI agents, Tidewave, Copilot, Claude Code -- go for it. We're not on a high horse about this. We're building an AI agent platform; it would be weird to ban AI from contributing to it. If you have an AI workflow you trust, use it. As long as the PR speaks for *you* and you stand behind the code, we don't care how it was produced. Every PR gets a thorough review regardless.
+
+We have to move fast. The sea is moving under our feet.
+
+**If something's missing, that's an opportunity.** No AGENTS.md? No usage_rules? Something feels like it should exist but doesn't? Open a PR or file an issue. The repo is days old -- there's a lot to build and we want your input on what it becomes.
+
+## Prerequisites
+
+Before you start, make sure you have:
+
+- **Elixir 1.18+** (with Erlang/OTP 27+) -- we recommend [asdf](https://asdf-vm.com/) or [mise](https://mise.jdx.dev/) for version management
+- **PostgreSQL 14+** -- running locally or via Docker
+- **Node.js 20+** -- for asset compilation
+
+You can verify your setup with:
+
+```bash
+elixir --version
+psql --version
+node --version
+```
+
+## Getting Set Up
+
+1. **Fork and clone the repo:**
+
+   ```bash
+   git clone https://github.com/<your-username>/loomkin.git
+   cd loomkin
+   ```
+
+2. **Install dependencies, create the database, and run migrations:**
+
+   ```bash
+   mix setup
+   ```
+
+   This handles everything: deps, database creation, migrations, and seed data.
+
+3. **Start the dev server:**
+
+   ```bash
+   mix phx.server
+   ```
+
+   The app runs at [http://localhost:4200](http://localhost:4200).
+
+4. **Run the test suite:**
+
+   ```bash
+   mix test
+   ```
+
+   We have 925+ tests. They should all pass on a fresh setup. If something fails, check that PostgreSQL is running and your Elixir version meets the minimum.
+
+## Development Workflow
+
+### Branching
+
+Create a branch from `main` with a descriptive name:
+
+```bash
+git checkout -b fix/agent-timeout-handling
+git checkout -b feat/add-discord-adapter
+git checkout -b docs/update-setup-instructions
+```
+
+Use prefixes like `fix/`, `feat/`, `docs/`, or `refactor/` to signal intent.
+
+### Commits
+
+Write clear, concise commit messages. We prefer imperative mood:
+
+```
+Fix agent loop crash on empty tool response
+Add keyboard shortcut for team switching
+Refactor priority router classification logic
+```
+
+No need for conventional commit prefixes like `fix:` -- just describe what you did.
+
+### Before You Commit
+
+Always run the formatter:
+
+```bash
+mix format
+```
+
+The project has a `.formatter.exs` that handles all formatting rules. If your editor supports it, enable format-on-save.
+
+Run the tests to make sure nothing is broken:
+
+```bash
+mix test
+```
+
+To run a specific test file or line:
+
+```bash
+mix test test/loomkin/teams/agent_test.exs
+mix test test/loomkin/teams/agent_test.exs:42
+```
+
+## Submitting a Pull Request
+
+1. Push your branch to your fork
+2. Open a PR against `main` on [github.com/bleuropa/loomkin](https://github.com/bleuropa/loomkin)
+3. Fill in a clear description of what your PR does and why
+4. If it addresses an issue, reference it (e.g., "Closes #123")
+5. Make sure CI passes -- we'll review from there
+
+Keep PRs focused. One logical change per PR is easier to review than a grab bag of unrelated edits.
+
+## Code Style
+
+- Follow the existing patterns in the codebase
+- Run `mix format` -- it's the single source of truth for formatting
+- Use pattern matching over conditional logic where it makes sense
+- Prefer functional components over LiveComponents
+- Use LiveView streams for collections
+- Keep modules focused and well-named
+
+If you're unsure about a design decision, open an issue or ask on Discord before writing a lot of code. We'd rather help you find the right approach early.
+
+## Testing Expectations
+
+- **New features** should include tests
+- **Bug fixes** should include a regression test when practical
+- **Don't break existing tests** -- if a test needs updating because of your change, update it and explain why in the PR
+
+We use `ExUnit` with the real database (no mocks for Ecto). Tests run in a sandbox, so they're isolated and can run concurrently.
+
+## Where to Ask Questions
+
+- **Discord:** [https://discord.gg/WUVneqArVD](https://discord.gg/WUVneqArVD) -- best for quick questions and discussion
+- **GitHub Issues:** [github.com/bleuropa/loomkin/issues](https://github.com/bleuropa/loomkin/issues) -- best for bugs, feature requests, and proposals
+
+## New Here?
+
+Look for issues labeled **"good first issue"** -- these are scoped, well-defined tasks that are a great way to get familiar with the codebase. If one catches your eye, drop a comment and we'll help you get started.
+
+---
+
+Thanks for contributing. Every improvement matters, and we appreciate your time.

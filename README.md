@@ -4,7 +4,11 @@
 
 # Loomkin
 
+[![CI](https://github.com/bleuropa/loomkin/actions/workflows/ci.yml/badge.svg)](https://github.com/bleuropa/loomkin/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
 [![Discord](https://img.shields.io/discord/1465498806698119317?color=5865F2&logo=discord&logoColor=white&label=Discord)](https://discord.gg/WUVneqArVD)
+[![Elixir](https://img.shields.io/badge/Elixir-1.18+-4B275F?logo=elixir&logoColor=white)](https://elixir-lang.org)
+[![Last Commit](https://img.shields.io/github/last-commit/bleuropa/loomkin)](https://github.com/bleuropa/loomkin/commits/main)
 
 **The AI coding assistant with a nervous system.**
 

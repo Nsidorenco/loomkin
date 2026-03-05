@@ -38,7 +38,9 @@ defmodule Loomkin.Teams.Role do
 
   @decision_tools [
     Loomkin.Tools.DecisionLog,
-    Loomkin.Tools.DecisionQuery
+    Loomkin.Tools.DecisionQuery,
+    Loomkin.Tools.PivotDecision,
+    Loomkin.Tools.GenerateWriteup
   ]
 
   @write_tools [
@@ -92,6 +94,9 @@ defmodule Loomkin.Teams.Role do
                Loomkin.Tools.Git,
                Loomkin.Tools.DecisionLog,
                Loomkin.Tools.DecisionQuery,
+               Loomkin.Tools.PivotDecision,
+               Loomkin.Tools.GenerateWriteup,
+               Loomkin.Tools.MergeGraph,
                Loomkin.Tools.SubAgent,
                Loomkin.Tools.LspDiagnostics
              ] ++ @lead_tools ++ @peer_tools ++ @cross_team_tools
@@ -129,7 +134,10 @@ defmodule Loomkin.Teams.Role do
     "context_offload" => Loomkin.Tools.ContextOffload,
     "ask_user" => Loomkin.Tools.AskUser,
     "cross_team_query" => Loomkin.Tools.CrossTeamQuery,
-    "list_teams" => Loomkin.Tools.ListTeams
+    "list_teams" => Loomkin.Tools.ListTeams,
+    "pivot_decision" => Loomkin.Tools.PivotDecision,
+    "generate_writeup" => Loomkin.Tools.GenerateWriteup,
+    "merge_graph" => Loomkin.Tools.MergeGraph
   }
 
   # -- Shared behavioral guidance (injected into all roles) --
@@ -314,7 +322,11 @@ defmodule Loomkin.Teams.Role do
       - Summarize findings in bullet points, not walls of text
       - Distinguish between confirmed facts and inferences
       - Note patterns, conventions, and potential issues
-      - Log important discoveries using the decision tools
+
+      ## Decision Graph Protocol
+      - Log significant findings as observations (node_type: "observation") with parent_id linking to the relevant goal
+      - When you identify a recommended approach, log it as a decision with confidence
+      - Use decision_query to check what's already known before starting research
       """
     },
     coder: %{
@@ -322,7 +334,7 @@ defmodule Loomkin.Teams.Role do
       tools:
         @read_only_tools ++
           @write_tools ++
-          @exec_tools ++ [Loomkin.Tools.DecisionLog] ++ @peer_tools ++ @cross_team_tools,
+          @exec_tools ++ @decision_tools ++ @peer_tools ++ @cross_team_tools,
       system_prompt: """
       You are a coding agent. Your job is to implement changes, write code, and run commands.
 
@@ -354,7 +366,11 @@ defmodule Loomkin.Teams.Role do
       ## Error Recovery
       - If your approach is blocked, try alternative approaches rather than brute forcing
       - If a test or command fails, analyze the root cause rather than retrying blindly
-      - Log significant implementation decisions using decision tools
+
+      ## Decision Graph Protocol
+      - Log implementation decisions (node_type: "decision") with confidence and rationale
+      - Log completed work as outcomes (node_type: "outcome") linked to the parent action
+      - If an approach fails, use pivot_decision to record why and what you're trying next
       """
     },
     reviewer: %{
@@ -387,7 +403,7 @@ defmodule Loomkin.Teams.Role do
       model_tier: :default,
       tools:
         @read_only_tools ++
-          [Loomkin.Tools.Shell, Loomkin.Tools.DecisionLog] ++ @peer_tools ++ @cross_team_tools,
+          [Loomkin.Tools.Shell] ++ @decision_tools ++ @peer_tools ++ @cross_team_tools,
       system_prompt: """
       You are a testing agent. Your job is to run tests, validate changes, and report results.
 
@@ -438,6 +454,13 @@ defmodule Loomkin.Teams.Role do
       - For testing: spawn a tester agent
       - For complex tasks: spawn a full team with team_spawn
       - You are NOT an individual contributor — delegate the actual work
+
+      ## Decision Graph Protocol
+      When you make strategic decisions or delegate work:
+      - Log goals with decision_log (node_type: "goal") to track session objectives
+      - Log key decisions with confidence scores (node_type: "decision")
+      - Check decision_query (type: "active_goals") before delegating to see existing context
+      - When an approach fails, use pivot_decision to record the learning and new direction
       """
     },
     orienter: %{
@@ -479,6 +502,12 @@ defmodule Loomkin.Teams.Role do
       - Be fast and concise — use the fast model efficiently
       - If tools fail, skip them and report what you have
       - Always send the brief even if some scans fail
+
+      ## Initial Goal Creation
+      After scanning, if no active goals exist (pulse shows 0 active goals):
+      - Create a goal node using decision_log with node_type "goal"
+      - Base the goal title on project state and recent activity
+      - Set confidence based on clarity of direction
       """
     }
   }

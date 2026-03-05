@@ -17,6 +17,15 @@ defmodule Loomkin.Decisions.Graph do
          |> Repo.insert() do
       {:ok, node} ->
         Phoenix.PubSub.broadcast(Loomkin.PubSub, "decision_graph", {:node_added, node})
+
+        if team_id = get_in(node.metadata, ["team_id"]) do
+          Phoenix.PubSub.broadcast(
+            Loomkin.PubSub,
+            "decision_graph:#{team_id}",
+            {:node_added, node}
+          )
+        end
+
         {:ok, node}
 
       error ->
@@ -243,6 +252,14 @@ defmodule Loomkin.Decisions.Graph do
       }
 
       Phoenix.PubSub.broadcast(Loomkin.PubSub, "decision_graph", {:pivot_created, result})
+
+      if team_id = get_in(base_metadata, ["team_id"]) do
+        Phoenix.PubSub.broadcast(
+          Loomkin.PubSub,
+          "decision_graph:#{team_id}",
+          {:pivot_created, result}
+        )
+      end
 
       result
     end)

@@ -236,6 +236,35 @@ defmodule LoomkinWeb.WorkspaceLive do
     trimmed = String.trim(text)
 
     case socket.assigns.reply_target do
+      %{agent: agent_name, team_id: team_id, mode: :steer} ->
+        # Steer a paused agent with user guidance
+        case Loomkin.Teams.Manager.find_agent(team_id, agent_name) do
+          {:ok, pid} ->
+            Task.Supervisor.start_child(Loomkin.Teams.TaskSupervisor, fn ->
+              Loomkin.Teams.Agent.steer(pid, trimmed)
+            end)
+
+            steer_event = %{
+              id: Ecto.UUID.generate(),
+              type: :message,
+              agent: "You",
+              content: "[Steering #{agent_name}]: #{trimmed}",
+              timestamp: DateTime.utc_now(),
+              expanded: false,
+              metadata: %{from: "You", to: agent_name, action: :steer}
+            }
+
+            events = cap_events(socket.assigns.activity_events ++ [steer_event])
+
+            {:noreply,
+             socket
+             |> assign(input_text: "", reply_target: nil, activity_events: events)
+             |> push_event("clear-input", %{})}
+
+          :error ->
+            {:noreply, assign(socket, reply_target: nil)}
+        end
+
       %{agent: agent_name, team_id: team_id} ->
         # Direct reply to a specific agent — validate agent still exists
         case Loomkin.Teams.Manager.find_agent(team_id, agent_name) do
@@ -1281,6 +1310,47 @@ defmodule LoomkinWeb.WorkspaceLive do
   # Forwarded from AgentRosterComponent reply button
   def handle_info({:reply_to_agent, agent_name, team_id}, socket) do
     {:noreply, assign(socket, reply_target: %{agent: agent_name, team_id: team_id})}
+  end
+
+  # Pause/Resume/Steer messages from AgentRosterComponent
+  def handle_info({:pause_agent, agent_name, team_id}, socket) do
+    case find_agent_pid(socket, agent_name, team_id) do
+      {:ok, pid} ->
+        Loomkin.Teams.Agent.request_pause(pid)
+        Logger.debug("[WorkspaceLive] Pause requested for #{agent_name}")
+
+      :error ->
+        Logger.warning("[WorkspaceLive] Cannot pause — agent #{agent_name} not found")
+    end
+
+    {:noreply, socket}
+  end
+
+  def handle_info({:resume_agent, agent_name, team_id}, socket) do
+    case find_agent_pid(socket, agent_name, team_id) do
+      {:ok, pid} ->
+        Task.Supervisor.start_child(Loomkin.Teams.TaskSupervisor, fn ->
+          Loomkin.Teams.Agent.resume(pid)
+        end)
+
+        Logger.debug("[WorkspaceLive] Resume requested for #{agent_name}")
+
+      :error ->
+        Logger.warning("[WorkspaceLive] Cannot resume — agent #{agent_name} not found")
+    end
+
+    {:noreply, socket}
+  end
+
+  def handle_info({:steer_agent, agent_name, team_id}, socket) do
+    # Set reply_target to the agent so the user can type guidance in the composer
+    # When they submit, it will be sent as steering guidance
+    {:noreply,
+     assign(socket,
+       reply_target: %{agent: agent_name, team_id: team_id, mode: :steer},
+       focused_agent: agent_name,
+       inspector_mode: :pinned
+     )}
   end
 
   def handle_info({:unpin_agent}, socket) do
@@ -2877,6 +2947,23 @@ defmodule LoomkinWeb.WorkspaceLive do
   end
 
   # --- Roster data helpers (for AgentRosterComponent) ---
+
+  defp find_agent_pid(socket, agent_name, team_id) do
+    effective_team_id =
+      if team_id do
+        team_id
+      else
+        # Fall back to scanning cached_agents, then the active team
+        fallback_team_id = socket.assigns[:team_id]
+        agents = socket.assigns.cached_agents
+
+        Enum.find_value(agents, fallback_team_id, fn a ->
+          if a.name == agent_name, do: a.team_id
+        end)
+      end
+
+    Loomkin.Teams.Manager.find_agent(effective_team_id, agent_name)
+  end
 
   defp roster_agents(nil), do: []
 

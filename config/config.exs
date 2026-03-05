@@ -3,11 +3,13 @@ import Config
 config :loomkin, ecto_repos: [Loomkin.Repo]
 
 config :loomkin, Loomkin.Repo,
-  database: Path.expand("../.loomkin/loom.db", __DIR__),
-  pool_size: 5,
+  username: "postgres",
+  password: "postgres",
+  hostname: "localhost",
+  database: "loomkin_dev",
+  stacktrace: true,
   show_sensitive_data_on_connection_error: true,
-  journal_mode: :wal,
-  busy_timeout: 5_000
+  pool_size: 10
 
 # Default model configuration
 config :loomkin,

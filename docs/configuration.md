@@ -9,7 +9,7 @@ Loomkin is configured through a combination of `.loomkin.toml` files and environ
 | `ANTHROPIC_API_KEY` | Anthropic API key | — |
 | `OPENAI_API_KEY` | OpenAI API key | — |
 | `GOOGLE_API_KEY` | Google AI API key | — |
-| `LOOMKIN_DB_PATH` | SQLite database path | `~/.loomkin/loomkin.db` |
+| `DATABASE_URL` | PostgreSQL connection URL | — |
 | `PORT` | Web UI port | `4200` |
 | `SECRET_KEY_BASE` | Phoenix secret key | Derived from `$HOME` |
 

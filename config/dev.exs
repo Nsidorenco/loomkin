@@ -1,7 +1,5 @@
 import Config
 
-config :loomkin, Loomkin.Repo, database: Path.expand("../.loomkin/dev.db", __DIR__)
-
 # Development endpoint configuration
 config :loomkin, LoomkinWeb.Endpoint,
   http: [ip: {127, 0, 0, 1}, port: 4200],

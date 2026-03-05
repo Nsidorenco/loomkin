@@ -59,7 +59,7 @@ defmodule Loomkin.MixProject do
       {:llm_db, ">= 0.0.0"},
 
       # Storage
-      {:ecto_sqlite3, "~> 0.17"},
+      {:postgrex, ">= 0.0.0"},
       {:ecto_sql, "~> 3.12"},
 
       # Git

@@ -41,7 +41,7 @@
 │  │Decision Graph│ │  Repo Intel  │ │ Context Window  │  │
 │  │ (7 node types│ │ (ETS index,  │ │ (token budget,  │  │
 │  │  DAG in      │ │  tree-sitter │ │  keeper offload, │  │
-│  │  SQLite)     │ │  + file      │ │  zero loss)     │  │
+│  │  Postgres)   │ │  + file      │ │  zero loss)     │  │
 │  │              │ │  watcher)    │ │                 │  │
 │  └──────────────┘ └──────────────┘ └─────────────────┘  │
 ├──────────────────────────────────────────────────────────┤
@@ -67,7 +67,7 @@ Three ways to interact with Loomkin — CLI, Phoenix LiveView web UI, and headle
 
 ### Session Layer
 
-Each conversation is a GenServer managing a `Jido.AI.Agent` (ReAct reasoning loop), a token-budgeted context window, a persistent decision graph, and a per-tool permission manager. Sessions can be saved and resumed from SQLite.
+Each conversation is a GenServer managing a `Jido.AI.Agent` (ReAct reasoning loop), a token-budgeted context window, a persistent decision graph, and a per-tool permission manager. Sessions can be saved and resumed from the database.
 
 ### Tool Layer
 
@@ -97,7 +97,7 @@ Inspired by [Deciduous](https://github.com/juspay/deciduous), Loomkin maintains 
 - **Context injection**: before every LLM call, active goals and recent decisions are injected into the system prompt — token-budgeted so it never blows the context window
 - **Pulse reports**: health checks that surface coverage gaps, stale decisions, and low-confidence areas
 
-The graph lives in SQLite (via Ecto) and travels with your project. When you come back to a codebase after a week, Loomkin remembers what you were trying to accomplish, what approaches were tried, and why certain options were rejected.
+The graph lives in PostgreSQL (via Ecto) and travels with your project. When you come back to a codebase after a week, Loomkin remembers what you were trying to accomplish, what approaches were tried, and why certain options were rejected.
 
 ### The Nervous System (Epic 5.19)
 
@@ -109,7 +109,7 @@ The decision graph isn't just a passive journal — it's an active shared nervou
 - **Graph-informed planning** — the ContextBuilder injects "Prior Attempts & Lessons" (revisit, abandoned, superseded nodes) into planning prompts so leaders decomposing tasks see "this was tried before" instead of rediscovering dead ends.
 - **Cross-session memory** — the graph links to archived keepers from past sessions, enabling new teams to learn from history.
 
-We chose to implement the decision graph natively in Elixir rather than shelling out to the Rust-based Deciduous CLI. Ecto gives us the same SQLite persistence with composable queries, and LiveView can render the graph interactively without a separate process. Full credit to the Deciduous project for pioneering the concept of structured decision tracking for AI agents.
+We chose to implement the decision graph natively in Elixir rather than shelling out to the Rust-based Deciduous CLI. Ecto gives us composable queries with PostgreSQL persistence, and LiveView can render the graph interactively without a separate process. Full credit to the Deciduous project for pioneering the concept of structured decision tracking for AI agents.
 
 ---
 
@@ -134,13 +134,13 @@ loomkin/
 │   │   ├── application.ex          # OTP supervision tree
 │   │   ├── agent.ex                # Jido.AI.Agent definition (tools + config)
 │   │   ├── config.ex               # ETS-backed config (TOML + env vars)
-│   │   ├── repo.ex                 # Ecto Repo (SQLite)
+│   │   ├── repo.ex                 # Ecto Repo (Postgres)
 │   │   ├── tool.ex                 # Shared helpers (safe_path!, param access)
 │   │   ├── project_rules.ex        # LOOMKIN.md parser
 │   │   ├── session/
 │   │   │   ├── session.ex          # Core GenServer + PubSub broadcasting
 │   │   │   ├── manager.ex          # Start/stop/find/list sessions
-│   │   │   ├── persistence.ex      # SQLite CRUD for sessions + messages
+│   │   │   ├── persistence.ex      # Database CRUD for sessions + messages
 │   │   │   ├── context_window.ex   # Token budget allocation + compaction
 │   │   │   └── architect.ex        # Two-model architect/editor workflow
 │   │   ├── agent_loop.ex           # Shared ReAct loop (sessions + team agents)
@@ -223,7 +223,7 @@ loomkin/
 │   │   ├── permissions/            # Tool permission system
 │   │   │   ├── manager.ex
 │   │   │   └── prompt.ex
-│   │   └── schemas/                # Ecto schemas (SQLite)
+│   │   └── schemas/                # Ecto schemas
 │   ├── loomkin_web/                   # Phoenix LiveView web UI
 │   │   ├── endpoint.ex             # Bandit HTTP endpoint
 │   │   ├── router.ex               # Browser routes + LiveDashboard
@@ -256,7 +256,7 @@ loomkin/
 │   ├── js/app.js                   # LiveSocket + hooks (ShiftEnterSubmit, ScrollToBottom)
 │   ├── css/app.css                 # Tailwind dark theme
 │   └── tailwind.config.js          # Tailwind configuration
-├── priv/repo/migrations/           # SQLite migrations
+├── priv/repo/migrations/           # Ecto migrations
 ├── test/                           # 925+ tests across 83 files
 ├── config/                         # Dev/test/prod/runtime config
 └── docs/                           # Architecture + migration docs

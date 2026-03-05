@@ -179,7 +179,7 @@ defmodule Loomkin.Teams.PairModeTest do
       assert node.agent_name == "reviewer1"
       assert node.description == "Missing error handling in auth flow"
       assert node.confidence == 80
-      # Ecto SQLite stores map keys as strings after JSON round-trip
+      # Ecto stores map keys as strings after JSON round-trip
       pair_id_val = node.metadata["pair_id"] || node.metadata[:pair_id]
       type_val = node.metadata["type"] || node.metadata[:type]
       assert pair_id_val == pair_id

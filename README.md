@@ -40,7 +40,7 @@ Every session is a team. One agent or twenty — the architecture is the same. C
 | **Agent concurrency** | 3-5 practical limit | 100+ lightweight processes per node |
 | **Model mixing** | Single model for all agents | Per-agent selection — cheap grunts + expensive judges (18x cost savings) |
 | **Web UI** | Terminal only, or separate web app | Full LiveView workspace — chat, files, diffs, decision graph, team dashboard. Zero JS |
-| **Decision persistence** | None | SQLite DAG with 7 node types, typed edges, confidence scores, pulse reports |
+| **Decision persistence** | None | PostgreSQL DAG with 7 node types, typed edges, confidence scores, pulse reports |
 | **MCP** | Client or server | Both — expose tools to editors AND consume external tools |
 | **Fault tolerance** | Crash = lost session | OTP supervisors restart crashed tools/sessions/agents automatically |
 | **Hot reload** | Restart required | Update tools, providers, prompts while agents are running |
@@ -54,6 +54,7 @@ Every session is a team. One agent or twenty — the architecture is the same. C
 ### Prerequisites
 
 - Elixir 1.18+
+- PostgreSQL 14+
 - An API key for at least one LLM provider (Anthropic, OpenAI, Google, etc.)
 
 ### Install
@@ -135,7 +136,7 @@ mix phx.server
 - **16 LLM providers** — Anthropic, OpenAI, Google, Z.AI, xAI, Groq, DeepSeek, OpenRouter, Mistral, Cerebras, Together AI, Fireworks AI, Cohere, Perplexity, NVIDIA, Azure. 665+ models via req_llm
 - **LSP client** — compiler errors/warnings from ElixirLS, next-ls, and other language servers
 - **File watcher** — OS-native with 200ms debounce, `.gitignore` filtering, automatic ETS index + repo map refresh
-- **Session persistence** — save/resume conversations with full history in SQLite
+- **Session persistence** — save/resume conversations with full history in PostgreSQL
 - **Permission system** — per-tool, per-path approval with session-scoped grants
 - **LLM retry** — exponential backoff with transient vs permanent error classification
 - **Hot code reloading** — update tools, add providers, tweak prompts without restarting sessions

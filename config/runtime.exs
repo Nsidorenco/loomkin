@@ -1,21 +1,25 @@
 import Config
 
-# Runtime configuration for Loomkinkin
+# Runtime configuration for Loomkin
 # Environment variables can override compile-time config here
 
 if model = System.get_env("LOOMKIN_MODEL") do
   config :loomkin, default_model: model
 end
 
-if db_path = System.get_env("LOOMKIN_DB_PATH") do
-  config :loomkin, Loomkin.Repo, database: db_path
+if database_url = System.get_env("DATABASE_URL") do
+  config :loomkin, Loomkin.Repo,
+    url: database_url,
+    pool_size: String.to_integer(System.get_env("POOL_SIZE") || "10")
 end
 
 if config_env() == :prod do
-  # Default database to ~/.loomkin/loom.db for release/binary mode
-  unless System.get_env("LOOMKIN_DB_PATH") do
-    config :loomkin, Loomkin.Repo,
-      database: Path.join([System.user_home!(), ".loomkin", "loomkin.db"])
+  # In production, DATABASE_URL is required
+  unless System.get_env("DATABASE_URL") do
+    raise """
+    environment variable DATABASE_URL is missing.
+    For example: ecto://USER:PASS@HOST/DATABASE
+    """
   end
 
   # Generate a stable secret for local binary usage, or use env var for server deploy

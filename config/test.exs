@@ -1,8 +1,12 @@
 import Config
 
 config :loomkin, Loomkin.Repo,
-  database: Path.expand("../.loomkin/test.db", __DIR__),
-  pool: Ecto.Adapters.SQL.Sandbox
+  username: "postgres",
+  password: "postgres",
+  hostname: "localhost",
+  database: "loomkin_test#{System.get_env("MIX_TEST_PARTITION")}",
+  pool: Ecto.Adapters.SQL.Sandbox,
+  pool_size: 10
 
 # We don't start the web server during test
 config :loomkin, LoomkinWeb.Endpoint,

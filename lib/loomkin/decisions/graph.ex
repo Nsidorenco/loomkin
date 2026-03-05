@@ -74,7 +74,7 @@ defmodule Loomkin.Decisions.Graph do
 
   defp apply_node_filters(query, [{:team_id, team_id} | rest]) do
     query
-    |> where([n], fragment("json_extract(?, '$.team_id') = ?", n.metadata, ^team_id))
+    |> where([n], fragment("? ->> 'team_id' = ?", n.metadata, ^team_id))
     |> apply_node_filters(rest)
   end
 
@@ -149,7 +149,7 @@ defmodule Loomkin.Decisions.Graph do
     query =
       case Keyword.get(opts, :team_id) do
         nil -> query
-        team_id -> where(query, [n], fragment("json_extract(?, '$.team_id') = ?", n.metadata, ^team_id))
+        team_id -> where(query, [n], fragment("? ->> 'team_id' = ?", n.metadata, ^team_id))
       end
 
     Repo.all(query)

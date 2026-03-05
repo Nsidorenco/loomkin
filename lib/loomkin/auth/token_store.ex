@@ -2,7 +2,7 @@ defmodule Loomkin.Auth.TokenStore do
   @moduledoc """
   Encrypted token persistence and in-memory cache for OAuth provider tokens.
 
-  Tokens are encrypted at rest in SQLite using `Plug.Crypto.MessageEncryptor`
+  Tokens are encrypted at rest in the database using `Plug.Crypto.MessageEncryptor`
   with a key derived from the application's `secret_key_base`. An ETS table
   provides fast reads so the hot path (every LLM request) never hits the DB.
 

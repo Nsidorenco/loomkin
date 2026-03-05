@@ -228,7 +228,7 @@ defmodule Loomkin.Teams.ContextKeeperTest do
   end
 
   describe "persistence" do
-    test "persists to SQLite on store" do
+    test "persists to database on store" do
       id = Ecto.UUID.generate()
       %{pid: pid} = start_keeper(id: id)
 
@@ -257,7 +257,7 @@ defmodule Loomkin.Teams.ContextKeeperTest do
       assert length(record.messages["messages"]) == 3
     end
 
-    test "reloads state from SQLite on restart" do
+    test "reloads state from database on restart" do
       id = Ecto.UUID.generate()
       team_id = "test-team-#{System.unique_integer([:positive])}"
 

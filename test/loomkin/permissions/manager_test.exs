@@ -57,19 +57,19 @@ defmodule Loomkin.Permissions.ManagerTest do
     end
   end
 
-  describe "is_auto_approved?/1" do
+  describe "auto_approved?/1" do
     test "returns true for default auto-approved tools" do
-      assert Manager.is_auto_approved?("file_read")
-      assert Manager.is_auto_approved?("file_search")
-      assert Manager.is_auto_approved?("content_search")
-      assert Manager.is_auto_approved?("directory_list")
+      assert Manager.auto_approved?("file_read")
+      assert Manager.auto_approved?("file_search")
+      assert Manager.auto_approved?("content_search")
+      assert Manager.auto_approved?("directory_list")
     end
 
     test "returns false for write/execute tools" do
-      refute Manager.is_auto_approved?("file_write")
-      refute Manager.is_auto_approved?("file_edit")
-      refute Manager.is_auto_approved?("shell")
-      refute Manager.is_auto_approved?("git")
+      refute Manager.auto_approved?("file_write")
+      refute Manager.auto_approved?("file_edit")
+      refute Manager.auto_approved?("shell")
+      refute Manager.auto_approved?("git")
     end
   end
 
@@ -104,6 +104,91 @@ defmodule Loomkin.Permissions.ManagerTest do
       assert grant.scope == "/some/path"
       assert grant.session_id == session.id
       assert grant.granted_at != nil
+    end
+  end
+
+  describe "record_decision/1" do
+    test "creates an audit log entry", %{session: session} do
+      assert {:ok, log} =
+               Manager.record_decision(%{
+                 session_id: session.id,
+                 team_id: "team-1",
+                 agent_name: "coder-1",
+                 tool_name: "file_write",
+                 tool_path: "/lib/foo.ex",
+                 action: :allow_once,
+                 comment: "looks safe"
+               })
+
+      assert log.agent_name == "coder-1"
+      assert log.tool_name == "file_write"
+      assert log.action == :allow_once
+      assert log.comment == "looks safe"
+      assert log.decided_at != nil
+    end
+
+    test "comment is optional", %{session: session} do
+      assert {:ok, log} =
+               Manager.record_decision(%{
+                 session_id: session.id,
+                 team_id: "team-1",
+                 agent_name: "coder-1",
+                 tool_name: "shell",
+                 action: :deny
+               })
+
+      assert log.comment == nil
+    end
+
+    test "validates action values", %{session: session} do
+      assert {:error, %Ecto.Changeset{valid?: false}} =
+               Manager.record_decision(%{
+                 session_id: session.id,
+                 team_id: "team-1",
+                 agent_name: "coder-1",
+                 tool_name: "shell",
+                 action: "invalid_action"
+               })
+    end
+  end
+
+  describe "list_recent_decisions/2" do
+    test "returns decisions ordered by most recent", %{session: session} do
+      actions = [:allow_once, :allow_always, :deny]
+
+      for {action, i} <- Enum.with_index(actions) do
+        decided_at =
+          DateTime.utc_now()
+          |> DateTime.add(i, :second)
+          |> DateTime.truncate(:second)
+
+        Manager.record_decision(%{
+          session_id: session.id,
+          team_id: "team-1",
+          agent_name: "coder-1",
+          tool_name: "file_write",
+          action: action,
+          decided_at: decided_at
+        })
+      end
+
+      decisions = Manager.list_recent_decisions(session.id)
+      assert length(decisions) == 3
+      assert hd(decisions).action == :deny
+    end
+
+    test "respects limit", %{session: session} do
+      for _ <- 1..5 do
+        Manager.record_decision(%{
+          session_id: session.id,
+          team_id: "team-1",
+          agent_name: "coder-1",
+          tool_name: "file_write",
+          action: :allow_once
+        })
+      end
+
+      assert length(Manager.list_recent_decisions(session.id, 2)) == 2
     end
   end
 end

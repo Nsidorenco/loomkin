@@ -1,8 +1,28 @@
 defmodule LoomkinWeb.TerminalComponent do
   use LoomkinWeb, :live_component
 
+  @max_commands 100
+
   def update(assigns, socket) do
-    {:ok, assign(socket, assigns)}
+    commands = assigns[:commands] || []
+    capped = Enum.take(commands, -@max_commands)
+    # Each command gets a stable monotonic ID based on its position in the
+    # ever-growing list. New commands appended to the tail get new IDs while
+    # existing commands keep theirs. This avoids duplicate DOM IDs when two
+    # commands have identical content.
+    total_seen = length(assigns[:commands] || [])
+    base_id = max(total_seen - length(capped), 0)
+
+    indexed = capped |> Enum.with_index(base_id) |> Enum.map(fn {cmd, id} -> {id, cmd} end)
+
+    {:ok,
+     socket
+     |> assign(Map.drop(assigns, [:commands]))
+     |> assign(
+       commands: capped,
+       indexed_commands: indexed,
+       cmd_base_id: base_id
+     )}
   end
 
   def render(assigns) do
@@ -32,14 +52,14 @@ defmodule LoomkinWeb.TerminalComponent do
         </div>
 
         <%!-- Command Blocks --%>
-        <div :for={cmd <- @commands} class="space-y-1 group" id={"cmd-#{:erlang.phash2(cmd)}"}>
+        <div :for={{cmd_id, cmd} <- @indexed_commands} class="space-y-1 group" id={"cmd-#{cmd_id}"}>
           <div class="flex items-start gap-1.5">
             <span class="text-emerald-400 select-none leading-relaxed">$</span>
             <span class="text-gray-200 leading-relaxed flex-1">{cmd.command}</span>
             <button
               class="opacity-0 group-hover:opacity-100 transition-opacity duration-200 text-gray-500 hover:text-gray-300 px-1.5 py-0.5 rounded bg-gray-800/50 text-[10px]"
               phx-hook="CopyToClipboard"
-              id={"copy-#{:erlang.phash2(cmd)}"}
+              id={"copy-#{cmd_id}"}
               data-copy-text={cmd_copy_text(cmd)}
             >
               Copy

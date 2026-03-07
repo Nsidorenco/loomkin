@@ -108,19 +108,19 @@ defmodule LoomkinWeb.TeamDashboardComponent do
         %Jido.Signal{type: "team.task.assigned", data: %{agent_name: agent_name}},
         socket
       ) do
-    {:noreply, reload_tasks(socket, agent_name)}
+    {:noreply, schedule_reload(socket, agent_name)}
   end
 
   def handle_info(%Jido.Signal{type: "team.task.completed", data: %{owner: owner}}, socket) do
-    {:noreply, reload_tasks(socket, owner)}
+    {:noreply, schedule_reload(socket, owner)}
   end
 
   def handle_info(%Jido.Signal{type: "team.task.started", data: %{owner: owner}}, socket) do
-    {:noreply, reload_tasks(socket, owner)}
+    {:noreply, schedule_reload(socket, owner)}
   end
 
   def handle_info(%Jido.Signal{type: "team.task.failed", data: %{owner: owner}}, socket) do
-    {:noreply, reload_tasks(socket, owner)}
+    {:noreply, schedule_reload(socket, owner)}
   end
 
   def handle_info(
@@ -139,11 +139,7 @@ defmodule LoomkinWeb.TeamDashboardComponent do
   end
 
   def handle_info(%Jido.Signal{type: "agent.escalation", data: %{agent_name: agent_name}}, socket) do
-    # Escalation may affect budget — reload cost data
-    summary = CostTracker.team_cost_summary(socket.assigns.team_id)
-    spent = to_float(summary.total_cost_usd)
-    budget_limit = socket.assigns.budget[:limit] || 5.0
-
+    # Escalation may affect budget — schedule debounced reload
     agents =
       Enum.map(socket.assigns.agents, fn agent ->
         if agent.name == agent_name, do: %{agent | status: :working}, else: agent
@@ -152,21 +148,45 @@ defmodule LoomkinWeb.TeamDashboardComponent do
     {:noreply,
      socket
      |> assign(:agents, agents)
-     |> assign(:budget, %{spent: spent, limit: budget_limit})}
+     |> schedule_reload(agent_name)}
+  end
+
+  def handle_info(:reload_dashboard, socket) do
+    dirty = socket.assigns[:dirty_agents] || MapSet.new()
+
+    {:noreply,
+     socket
+     |> assign(reload_timer: nil, dirty_agents: MapSet.new())
+     |> reload_tasks(dirty)}
   end
 
   def handle_info(_msg, socket) do
     {:noreply, socket}
   end
 
-  defp reload_tasks(socket, agent_name) do
+  defp schedule_reload(socket, agent_name) do
+    if timer = socket.assigns[:reload_timer] do
+      Process.cancel_timer(timer)
+    end
+
+    dirty = socket.assigns[:dirty_agents] || MapSet.new()
+    dirty = MapSet.put(dirty, agent_name)
+    timer = Process.send_after(self(), :reload_dashboard, 500)
+    assign(socket, reload_timer: timer, dirty_agents: dirty)
+  end
+
+  defp reload_tasks(socket, dirty_agents) do
     team_id = socket.assigns.team_id
     tasks = Tasks.list_all(team_id)
-    current_task = find_agent_current_task(team_id, agent_name)
 
     agents =
       Enum.map(socket.assigns.agents, fn agent ->
-        if agent.name == agent_name, do: %{agent | current_task: current_task}, else: agent
+        if MapSet.member?(dirty_agents, agent.name) do
+          current_task = find_agent_current_task(team_id, agent.name)
+          %{agent | current_task: current_task}
+        else
+          agent
+        end
       end)
 
     summary = CostTracker.team_cost_summary(team_id)

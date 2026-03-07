@@ -50,10 +50,7 @@ defmodule LoomkinWeb.WorkspaceLive do
         focused_agent: nil,
         inspector_mode: :auto_follow,
         collapsed_inspector: false,
-        # Command palette
-        command_palette_open: false,
-        command_palette_query: "",
-        command_palette_results: [],
+        # Command palette state is now owned by CommandPaletteComponent
         # Ask-user pending questions
         pending_questions: [],
         # Collaboration health score (0-100)
@@ -68,8 +65,7 @@ defmodule LoomkinWeb.WorkspaceLive do
         vote_signals_subscribed: false,
         # Debounce timer for metrics updates
         metrics_debounce_ref: nil,
-        # Agent picker for composer
-        show_agent_picker: false,
+        # Agent picker state is now owned by ComposerComponent
         # Cached roster data (recomputed on roster refresh, not per render)
         cached_agents: [],
         cached_tasks: [],
@@ -79,10 +75,8 @@ defmodule LoomkinWeb.WorkspaceLive do
         last_user_message: nil,
         # Message queue UI state
         queue_drawer: nil,
-        schedule_popover: false,
         agent_queues: %{},
         scheduled_messages: [],
-        schedule_delay_minutes: 5,
         # Kin management panel
         kin_panel_open: false,
         kin_agents: [],
@@ -451,25 +445,7 @@ defmodule LoomkinWeb.WorkspaceLive do
     {:noreply, assign(socket, reply_target: nil)}
   end
 
-  def handle_event("toggle_agent_picker", _params, socket) do
-    {:noreply, assign(socket, show_agent_picker: !socket.assigns.show_agent_picker)}
-  end
-
-  def handle_event("select_reply_target", %{"agent" => agent_name, "team-id" => team_id}, socket) do
-    {:noreply,
-     assign(socket,
-       reply_target: %{agent: agent_name, team_id: team_id},
-       show_agent_picker: false
-     )}
-  end
-
-  def handle_event("select_reply_target", %{"agent" => "team"}, socket) do
-    {:noreply, assign(socket, reply_target: nil, show_agent_picker: false)}
-  end
-
-  def handle_event("close_agent_picker", _params, socket) do
-    {:noreply, assign(socket, show_agent_picker: false)}
-  end
+  # toggle_agent_picker, select_reply_target, close_agent_picker moved to ComposerComponent
 
   def handle_event("open_kin_panel", _params, socket) do
     {:noreply, assign(socket, kin_panel_open: true)}
@@ -612,45 +588,19 @@ defmodule LoomkinWeb.WorkspaceLive do
   end
 
   def handle_event("keyboard_shortcut", %{"key" => "escape"}, socket) do
-    cond do
-      socket.assigns.command_palette_open ->
-        {:noreply,
-         assign(socket,
-           command_palette_open: false,
-           command_palette_query: "",
-           command_palette_results: []
-         )}
-
-      socket.assigns.show_agent_picker ->
-        {:noreply, assign(socket, show_agent_picker: false)}
-
-      true ->
-        {:noreply,
-         assign(socket,
-           focused_agent: nil,
-           inspector_mode: :auto_follow,
-           reply_target: nil
-         )}
-    end
+    {:noreply,
+     assign(socket,
+       focused_agent: nil,
+       inspector_mode: :auto_follow,
+       reply_target: nil
+     )}
   end
 
   def handle_event("keyboard_shortcut", %{"key" => "focus_input"}, socket) do
     {:noreply, push_event(socket, "focus-input", %{})}
   end
 
-  def handle_event("keyboard_shortcut", %{"key" => "command_palette"}, socket) do
-    if socket.assigns.command_palette_open do
-      {:noreply,
-       assign(socket,
-         command_palette_open: false,
-         command_palette_query: "",
-         command_palette_results: []
-       )}
-    else
-      results = build_palette_results(socket, "")
-      {:noreply, assign(socket, command_palette_open: true, command_palette_results: results)}
-    end
-  end
+  # keyboard_shortcut "command_palette" now handled by CommandPaletteComponent
 
   def handle_event("keyboard_shortcut", %{"key" => "focus_panel_4"}, socket) do
     {:noreply, assign(socket, file_drawer_open: !socket.assigns.file_drawer_open)}
@@ -679,106 +629,7 @@ defmodule LoomkinWeb.WorkspaceLive do
     {:noreply, assign(socket, team_sub_tab: new_tab)}
   end
 
-  def handle_event("palette_search", %{"value" => query}, socket) do
-    results = build_palette_results(socket, query)
-
-    {:noreply, assign(socket, command_palette_query: query, command_palette_results: results)}
-  end
-
-  def handle_event("palette_select", %{"type" => "agent", "value" => agent_name}, socket) do
-    {:noreply,
-     assign(socket,
-       focused_agent: agent_name,
-       inspector_mode: :pinned,
-       command_palette_open: false,
-       command_palette_query: "",
-       command_palette_results: []
-     )}
-  end
-
-  @palette_valid_tabs ~w(files diff)
-  def handle_event("palette_select", %{"type" => "tab", "value" => tab}, socket)
-      when tab in @palette_valid_tabs do
-    {:noreply,
-     assign(socket,
-       file_drawer_open: true,
-       command_palette_open: false,
-       command_palette_query: "",
-       command_palette_results: []
-     )}
-  end
-
-  def handle_event("palette_select", %{"type" => "action", "value" => "toggle_mode"}, socket) do
-    new_mode = if socket.assigns.mode == :solo, do: :mission_control, else: :solo
-
-    {:noreply,
-     assign(socket,
-       mode: new_mode,
-       command_palette_open: false,
-       command_palette_query: "",
-       command_palette_results: []
-     )}
-  end
-
-  def handle_event("palette_select", %{"type" => "action", "value" => "switch_project"}, socket) do
-    {:noreply,
-     socket
-     |> assign(
-       command_palette_open: false,
-       command_palette_query: "",
-       command_palette_results: [],
-       switch_project_modal: %{
-         phase: :input,
-         target_path: socket.assigns.explorer_path,
-         active_agents: []
-       }
-     )}
-  end
-
-  def handle_event("palette_select", %{"type" => "action", "value" => "focus_input"}, socket) do
-    {:noreply,
-     socket
-     |> assign(
-       command_palette_open: false,
-       command_palette_query: "",
-       command_palette_results: []
-     )
-     |> push_event("focus-input", %{})}
-  end
-
-  def handle_event("palette_select", %{"type" => "action", "value" => "refresh_channels"}, socket) do
-    team_id = socket.assigns[:active_team_id]
-    bindings = load_channel_bindings(team_id)
-
-    {:noreply,
-     assign(socket,
-       channel_bindings: bindings,
-       command_palette_open: false,
-       command_palette_query: "",
-       command_palette_results: []
-     )}
-  end
-
-  @palette_valid_sub_tabs ~w(activity graph)
-  def handle_event("palette_select", %{"type" => "sub_tab", "value" => tab}, socket)
-      when tab in @palette_valid_sub_tabs do
-    {:noreply,
-     assign(socket,
-       team_sub_tab: String.to_existing_atom(tab),
-       command_palette_open: false,
-       command_palette_query: "",
-       command_palette_results: []
-     )}
-  end
-
-  def handle_event("close_command_palette", _params, socket) do
-    {:noreply,
-     assign(socket,
-       command_palette_open: false,
-       command_palette_query: "",
-       command_palette_results: []
-     )}
-  end
+  # palette_search, palette_select, close_command_palette moved to CommandPaletteComponent
 
   # --- Ask User ---
 
@@ -804,73 +655,14 @@ defmodule LoomkinWeb.WorkspaceLive do
     end
   end
 
-  # --- Agent Card action buttons — forward to existing info handlers to avoid duplication ---
-
-  def handle_event("focus_card_agent", %{"agent" => agent_name}, socket) do
-    send(self(), {:focus_agent, agent_name})
-    {:noreply, socket}
-  end
-
-  def handle_event("unfocus_agent", _params, socket) do
-    {:noreply, assign(socket, focused_agent: nil, inspector_mode: nil)}
-  end
-
-  def handle_event("reply_to_card_agent", %{"agent" => agent_name, "team-id" => team_id}, socket) do
-    send(self(), {:reply_to_agent, agent_name, team_id})
-    {:noreply, socket}
-  end
-
-  def handle_event("pause_card_agent", %{"agent" => agent_name, "team-id" => team_id}, socket) do
-    send(self(), {:pause_agent, agent_name, team_id})
-    {:noreply, socket}
-  end
-
-  def handle_event("resume_card_agent", %{"agent" => agent_name, "team-id" => team_id}, socket) do
-    send(self(), {:resume_agent, agent_name, team_id})
-    {:noreply, socket}
-  end
-
-  def handle_event("steer_card_agent", %{"agent" => agent_name, "team-id" => team_id}, socket) do
-    send(self(), {:steer_agent, agent_name, team_id})
-    {:noreply, socket}
-  end
-
-  # --- Queue Drawer ---
-
-  def handle_event("open_queue_drawer", %{"agent" => agent_name, "team-id" => team_id}, socket) do
-    {:noreply, assign(socket, queue_drawer: %{agent: agent_name, team_id: team_id})}
-  end
-
-  def handle_event("toggle_queue_from_composer", _params, socket) do
-    case socket.assigns.reply_target do
-      %{agent: agent_name, team_id: team_id} ->
-        {:noreply, assign(socket, queue_drawer: %{agent: agent_name, team_id: team_id})}
-
-      _ ->
-        {:noreply, socket}
-    end
-  end
+  # Agent card actions now forwarded via {:mission_control_event, ...}
+  # Queue drawer toggle now forwarded via {:composer_event, ...}
 
   def handle_event("close_queue_drawer", _params, socket) do
     {:noreply, assign(socket, queue_drawer: nil)}
   end
 
-  # --- Schedule Messages ---
-
-  # Server roundtrip is required here because schedule_popover is also reset from
-  # close_scheduler (phx-click-away) and schedule_message handlers, and the assign
-  # drives conditional button styling in the template. A pure JS.toggle would desync.
-  def handle_event("toggle_scheduler", _params, socket) do
-    {:noreply, assign(socket, schedule_popover: !socket.assigns.schedule_popover)}
-  end
-
-  def handle_event("close_scheduler", _params, socket) do
-    {:noreply, assign(socket, schedule_popover: false)}
-  end
-
-  def handle_event("set_schedule_delay", %{"minutes" => minutes}, socket) do
-    {:noreply, assign(socket, schedule_delay_minutes: String.to_integer(minutes))}
-  end
+  # toggle_scheduler, close_scheduler, set_schedule_delay moved to ComposerComponent
 
   def handle_event(
         "schedule_message",
@@ -2162,6 +1954,180 @@ defmodule LoomkinWeb.WorkspaceLive do
     {:noreply, put_flash(socket, :info, "Scheduled message delivered to #{agent_name}")}
   end
 
+  # --- Forwarded component events ---
+
+  # Command palette actions forwarded from CommandPaletteComponent
+  def handle_info({:command_palette_action, "agent", agent_name}, socket) do
+    {:noreply, assign(socket, focused_agent: agent_name, inspector_mode: :pinned)}
+  end
+
+  def handle_info({:command_palette_action, "tab", _tab}, socket) do
+    {:noreply, assign(socket, file_drawer_open: true)}
+  end
+
+  def handle_info({:command_palette_action, "sub_tab", tab}, socket) do
+    {:noreply, assign(socket, team_sub_tab: String.to_existing_atom(tab))}
+  end
+
+  def handle_info({:command_palette_action, "action", "toggle_mode"}, socket) do
+    new_mode = if socket.assigns.mode == :solo, do: :mission_control, else: :solo
+    {:noreply, assign(socket, mode: new_mode)}
+  end
+
+  def handle_info({:command_palette_action, "action", "switch_project"}, socket) do
+    {:noreply,
+     assign(socket,
+       switch_project_modal: %{
+         phase: :input,
+         target_path: socket.assigns.explorer_path,
+         active_agents: []
+       }
+     )}
+  end
+
+  def handle_info({:command_palette_action, "action", "focus_input"}, socket) do
+    {:noreply, push_event(socket, "focus-input", %{})}
+  end
+
+  def handle_info({:command_palette_action, "action", "refresh_channels"}, socket) do
+    team_id = socket.assigns[:active_team_id]
+    bindings = load_channel_bindings(team_id)
+    {:noreply, assign(socket, channel_bindings: bindings)}
+  end
+
+  def handle_info({:command_palette_action, _type, _value}, socket) do
+    {:noreply, socket}
+  end
+
+  # Composer events forwarded from ComposerComponent
+  def handle_info({:composer_event, "send_message", params}, socket) do
+    handle_event("send_message", params, socket)
+  end
+
+  def handle_info({:composer_event, "cancel_reply", _params}, socket) do
+    {:noreply, assign(socket, reply_target: nil)}
+  end
+
+  def handle_info({:composer_event, "select_reply_target", %{"agent" => "team"}}, socket) do
+    {:noreply, assign(socket, reply_target: nil)}
+  end
+
+  def handle_info(
+        {:composer_event, "select_reply_target", %{"agent" => agent_name, "team-id" => team_id}},
+        socket
+      ) do
+    {:noreply, assign(socket, reply_target: %{agent: agent_name, team_id: team_id})}
+  end
+
+  def handle_info({:composer_event, "toggle_queue_from_composer", _params}, socket) do
+    case socket.assigns.reply_target do
+      %{agent: agent_name, team_id: team_id} ->
+        {:noreply, assign(socket, queue_drawer: %{agent: agent_name, team_id: team_id})}
+
+      _ ->
+        {:noreply, socket}
+    end
+  end
+
+  def handle_info({:composer_event, "enqueue_message", _params}, socket) do
+    handle_event("enqueue_message", %{}, socket)
+  end
+
+  def handle_info({:composer_event, "inject_guidance", _params}, socket) do
+    handle_event("inject_guidance", %{}, socket)
+  end
+
+  def handle_info({:composer_event, _event, _params}, socket) do
+    {:noreply, socket}
+  end
+
+  # Sidebar events forwarded from SidebarPanelComponent
+  def handle_info({:sidebar_event, "switch_tab", %{"tab" => tab}}, socket) do
+    handle_event("switch_tab", %{"tab" => tab}, socket)
+  end
+
+  def handle_info({:sidebar_event, "deselect_file", _params}, socket) do
+    {:noreply, assign(socket, selected_file: nil, file_content: nil)}
+  end
+
+  def handle_info({:sidebar_event, "edit_explorer_path", _params}, socket) do
+    {:noreply, assign(socket, editing_explorer_path: true)}
+  end
+
+  def handle_info({:sidebar_event, "cancel_edit_explorer", _params}, socket) do
+    {:noreply, assign(socket, editing_explorer_path: false)}
+  end
+
+  def handle_info({:sidebar_event, "set_explorer_path", params}, socket) do
+    handle_event("set_explorer_path", params, socket)
+  end
+
+  def handle_info({:sidebar_event, _event, _params}, socket) do
+    {:noreply, socket}
+  end
+
+  # Mission control events forwarded from MissionControlPanelComponent
+  def handle_info({:mission_control_event, "focus_card_agent", %{"agent" => agent_name}}, socket) do
+    send(self(), {:focus_agent, agent_name})
+    {:noreply, socket}
+  end
+
+  def handle_info({:mission_control_event, "unfocus_agent", _params}, socket) do
+    {:noreply, assign(socket, focused_agent: nil, inspector_mode: nil)}
+  end
+
+  def handle_info(
+        {:mission_control_event, "reply_to_card_agent",
+         %{"agent" => agent_name, "team-id" => team_id}},
+        socket
+      ) do
+    send(self(), {:reply_to_agent, agent_name, team_id})
+    {:noreply, socket}
+  end
+
+  def handle_info(
+        {:mission_control_event, "pause_card_agent",
+         %{"agent" => agent_name, "team-id" => team_id}},
+        socket
+      ) do
+    send(self(), {:pause_agent, agent_name, team_id})
+    {:noreply, socket}
+  end
+
+  def handle_info(
+        {:mission_control_event, "resume_card_agent",
+         %{"agent" => agent_name, "team-id" => team_id}},
+        socket
+      ) do
+    send(self(), {:resume_agent, agent_name, team_id})
+    {:noreply, socket}
+  end
+
+  def handle_info(
+        {:mission_control_event, "steer_card_agent",
+         %{"agent" => agent_name, "team-id" => team_id}},
+        socket
+      ) do
+    send(self(), {:steer_agent, agent_name, team_id})
+    {:noreply, socket}
+  end
+
+  def handle_info(
+        {:mission_control_event, "open_queue_drawer",
+         %{"agent" => agent_name, "team-id" => team_id}},
+        socket
+      ) do
+    {:noreply, assign(socket, queue_drawer: %{agent: agent_name, team_id: team_id})}
+  end
+
+  def handle_info({:mission_control_event, "spawn_dormant_kin", %{"id" => id}}, socket) do
+    handle_event("spawn_dormant_kin", %{"id" => id}, socket)
+  end
+
+  def handle_info({:mission_control_event, _event, _params}, socket) do
+    {:noreply, socket}
+  end
+
   # --- Queue drawer actions (delegated from MessageQueueComponent) ---
 
   def handle_info({:queue_action, :close_drawer}, socket) do
@@ -2251,7 +2217,11 @@ defmodule LoomkinWeb.WorkspaceLive do
       />
 
       <%!-- Command palette overlay --%>
-      {render_command_palette(assigns)}
+      <.live_component
+        module={LoomkinWeb.CommandPaletteComponent}
+        id="command-palette"
+        agents={@cached_agents}
+      />
 
       <%!-- ── Header ── --%>
       <header class="flex-shrink-0 flex items-center gap-3 px-3 py-1.5 sm:px-4 lg:px-5 relative bg-surface-1 border-b border-subtle z-50">
@@ -2402,7 +2372,129 @@ defmodule LoomkinWeb.WorkspaceLive do
 
       <%!-- ── Main Content — branches on mode ── --%>
       <div class="flex flex-1 min-h-0 flex-col xl:flex-row">
-        {render_mode(@mode, assigns)}
+        <%= if @mode == :solo do %>
+          <%!-- Left: Chat + Input --%>
+          <div class="flex-1 flex flex-col min-w-0 min-h-0 bg-surface-0">
+            <div class="flex-1 overflow-auto min-h-0">
+              <.live_component
+                module={LoomkinWeb.ChatComponent}
+                id="chat"
+                messages={@messages}
+                status={@status}
+                current_tool={@current_tool}
+                streaming={@streaming}
+                streaming_content={@streaming_content}
+                architect_phase={@architect_phase}
+                plan_steps={@plan_steps}
+                current_step={@current_step}
+              />
+            </div>
+
+            <%!-- Pending ask_user questions (also shown in solo mode) --%>
+            <div
+              :if={@pending_questions != []}
+              class="flex-shrink-0 px-3 py-2 border-t border-brand bg-surface-1"
+            >
+              <.live_component
+                module={LoomkinWeb.AskUserComponent}
+                id="ask-user-questions-solo"
+                questions={@pending_questions}
+              />
+            </div>
+
+            <.live_component
+              module={LoomkinWeb.ComposerComponent}
+              id="composer"
+              input_text={@input_text}
+              reply_target={Map.get(assigns, :reply_target)}
+              cached_agents={@cached_agents}
+              cached_budget={@cached_budget}
+              budget_pct={@budget_pct}
+              budget_bar_color_class={@budget_bar_color_class}
+              last_user_message={@last_user_message}
+              queue_drawer={@queue_drawer}
+              scheduled_messages={@scheduled_messages}
+              agent_queues={@agent_queues}
+              active_team_id={@active_team_id}
+              session_id={@session_id}
+              status={@status}
+              agent_cards={@agent_cards}
+            />
+          </div>
+
+          <%!-- Right: Sidebar --%>
+          <.live_component
+            module={LoomkinWeb.SidebarPanelComponent}
+            id="sidebar-panel"
+            active_tab={@active_tab}
+            selected_file={@selected_file}
+            file_content={@file_content}
+            diffs={@diffs}
+            file_tree_version={@file_tree_version}
+            session_id={@session_id}
+            active_team_id={@active_team_id}
+            explorer_path={@explorer_path || @project_path}
+            project_path={@project_path}
+          />
+        <% else %>
+          <%!-- Mission Control Left: Agent Cards + Comms + Composer --%>
+          <.live_component
+            module={LoomkinWeb.MissionControlPanelComponent}
+            id="mission-control-panel"
+            agent_cards={@agent_cards}
+            concierge_card_names={@concierge_card_names}
+            worker_card_names={@worker_card_names}
+            comms_event_count={@comms_event_count}
+            comms_stream={@streams.comms_events}
+            focused_agent={@focused_agent}
+            kin_agents={@kin_agents}
+            cached_agents={@cached_agents}
+            active_team_id={@active_team_id}
+          />
+
+          <%!-- Composer below the mission control panel --%>
+          <div class="flex-shrink-0 border-r border-subtle">
+            <.live_component
+              module={LoomkinWeb.ComposerComponent}
+              id="composer"
+              input_text={@input_text}
+              reply_target={Map.get(assigns, :reply_target)}
+              cached_agents={@cached_agents}
+              cached_budget={@cached_budget}
+              budget_pct={@budget_pct}
+              budget_bar_color_class={@budget_bar_color_class}
+              last_user_message={@last_user_message}
+              queue_drawer={@queue_drawer}
+              scheduled_messages={@scheduled_messages}
+              agent_queues={@agent_queues}
+              active_team_id={@active_team_id}
+              session_id={@session_id}
+              status={@status}
+              agent_cards={@agent_cards}
+            />
+
+            <%!-- Queue drawer overlay --%>
+            <.live_component
+              :if={@queue_drawer}
+              module={LoomkinWeb.MessageQueueComponent}
+              id={"queue-drawer-#{@queue_drawer.agent}"}
+              queue={Map.get(@agent_queues, @queue_drawer.agent, [])}
+              agent_name={@queue_drawer.agent}
+              team_id={@queue_drawer.team_id}
+            />
+          </div>
+
+          <%!-- Right: Agent Deep-Focus Panel (w-80, collapsible) --%>
+          <.live_component
+            module={LoomkinWeb.ContextInspectorComponent}
+            id="context-inspector"
+            focused_agent={@focused_agent}
+            focused_card={if(@focused_agent, do: Map.get(@agent_cards, @focused_agent))}
+            inspector_mode={@inspector_mode}
+            session_id={@session_id}
+            team_id={@active_team_id}
+          />
+        <% end %>
       </div>
 
       <%!-- Kin Management Panel --%>
@@ -2429,334 +2521,13 @@ defmodule LoomkinWeb.WorkspaceLive do
     """
   end
 
-  # --- Solo Mode (current layout, minus :team tab) ---
+  # render_mode/2 removed — inlined in render/1 with .live_component calls
+  # card_grid_cols/1, any_agents_active?/2, render_ghost_cards/1, kin_potency_color/1
+  # render_budget_bar/1 moved to their respective extracted components
 
-  defp render_mode(:solo, assigns) do
-    ~H"""
-    <%!-- Left: Chat + Input --%>
-    <div class="flex-1 flex flex-col min-w-0 min-h-0 bg-surface-0">
-      <div class="flex-1 overflow-auto min-h-0">
-        <.live_component
-          module={LoomkinWeb.ChatComponent}
-          id="chat"
-          messages={@messages}
-          status={@status}
-          current_tool={@current_tool}
-          streaming={@streaming}
-          streaming_content={@streaming_content}
-          architect_phase={@architect_phase}
-          plan_steps={@plan_steps}
-          current_step={@current_step}
-        />
-      </div>
+  # render_last_message_strip/1, render_input_bar/1, format_decimal_cost/1 moved to ComposerComponent
 
-      <%!-- Pending ask_user questions (also shown in solo mode) --%>
-      <div
-        :if={@pending_questions != []}
-        class="flex-shrink-0 px-3 py-2 border-t border-brand bg-surface-1"
-      >
-        <.live_component
-          module={LoomkinWeb.AskUserComponent}
-          id="ask-user-questions-solo"
-          questions={@pending_questions}
-        />
-      </div>
-
-      {render_input_bar(assigns)}
-    </div>
-
-    <%!-- Right: Sidebar --%>
-    <div class="h-[20rem] w-full flex flex-col xl:h-auto xl:w-80 bg-surface-1 border-t border-subtle">
-      <%!-- Sidebar tab bar --%>
-      <div class="flex items-center gap-0.5 px-1.5 py-1 overflow-x-auto flex-shrink-0 border-b border-subtle">
-        <button
-          :for={tab <- [:files, :diff, :graph]}
-          phx-click="switch_tab"
-          phx-value-tab={tab}
-          class={"relative flex items-center gap-1 px-2 py-1.5 text-[11px] font-medium rounded-md transition-all duration-200 interactive " <>
-            if(@active_tab == tab,
-              do: "text-brand after:absolute after:bottom-0 after:left-1 after:right-1 after:h-[1.5px] after:rounded-full after:bg-violet-500",
-              else: "text-muted")}
-        >
-          <span>{tab_icon(tab)}</span>
-          <span class="text-[10px]">{tab_label(tab)}</span>
-        </button>
-      </div>
-
-      <%!-- Sidebar content --%>
-      <div
-        class="flex-1 overflow-auto p-3 tab-content-enter bg-surface-0"
-        phx-hook="TabTransition"
-        id={"tab-content-#{@active_tab}"}
-      >
-        {render_tab(@active_tab, assigns)}
-      </div>
-    </div>
-    """
-  end
-
-  # --- Mission Control Mode (three-panel layout) ---
-
-  defp render_mode(:mission_control, assigns) do
-    focused_card =
-      if assigns.focused_agent do
-        Map.get(assigns.agent_cards, assigns.focused_agent)
-      end
-
-    assigns = assign(assigns, :focused_card, focused_card)
-
-    ~H"""
-    <%!-- Left: Agent Cards + Comms + Composer (flex-1) --%>
-    <div class="flex-1 flex flex-col min-w-0 min-h-0 bg-surface-0 border-r border-subtle">
-      <%= if @focused_card do %>
-        <%!-- Focused single-agent view --%>
-        <div class="flex-1 flex flex-col min-h-0 p-3 overflow-hidden">
-          <div class="flex items-center gap-2 mb-3 flex-shrink-0">
-            <button
-              phx-click="unfocus_agent"
-              class="text-xs text-muted hover:text-brand flex items-center gap-1 interactive"
-            >
-              <svg class="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor">
-                <path
-                  fill-rule="evenodd"
-                  d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z"
-                  clip-rule="evenodd"
-                />
-              </svg>
-              All agents
-            </button>
-          </div>
-          <div class="flex-1 overflow-auto min-h-0">
-            <.live_component
-              module={LoomkinWeb.AgentCardComponent}
-              id={"agent-card-#{@focused_card.name}"}
-              card={@focused_card}
-              focused={true}
-              team_id={@active_team_id}
-              model={@focused_card[:model]}
-            />
-          </div>
-        </div>
-      <% else %>
-        <%!-- Concierge — dedicated top card --%>
-        <div :if={@concierge_card_names != []} class="flex-shrink-0 p-3 pb-0">
-          <.live_component
-            :for={name <- @concierge_card_names}
-            module={LoomkinWeb.AgentCardComponent}
-            id={"agent-card-#{name}"}
-            card={@agent_cards[name]}
-            focused={false}
-            team_id={@active_team_id}
-            model={@agent_cards[name][:model]}
-          />
-        </div>
-
-        <%!-- Team Agents Section --%>
-        <div class="flex-shrink-0 p-3 pb-0">
-          <div class="flex items-center gap-2 mb-2">
-            <div class="flex items-center gap-1.5">
-              <svg class="w-3.5 h-3.5 text-muted" viewBox="0 0 20 20" fill="currentColor">
-                <path d="M7 8a3 3 0 100-6 3 3 0 000 6zM14.5 9a2.5 2.5 0 100-5 2.5 2.5 0 000 5zM1.615 16.428a1.224 1.224 0 01-.569-1.175 6.002 6.002 0 0111.908 0c.058.467-.172.92-.57 1.174A9.953 9.953 0 017 18a9.953 9.953 0 01-5.385-1.572zM14.5 16h-.106c.07-.297.088-.611.048-.933a7.47 7.47 0 00-1.588-3.755 4.502 4.502 0 015.874 2.636.818.818 0 01-.36.98A7.465 7.465 0 0114.5 16z" />
-              </svg>
-              <span class="text-xs font-medium text-muted uppercase tracking-wider">Kin</span>
-            </div>
-            <span class="text-[10px] tabular-nums px-1.5 py-0.5 rounded-full font-medium text-muted bg-surface-2">
-              {length(@worker_card_names)}
-            </span>
-            <div class="flex-1 h-px bg-border-subtle"></div>
-          </div>
-
-          <%!-- Waiting state: session exists but agents haven't spawned yet --%>
-          <div
-            :if={@concierge_card_names == [] && @worker_card_names == [] && @active_team_id}
-            class="rounded-lg py-4 px-4 text-center bg-surface-1 border border-subtle"
-          >
-            <div class="flex justify-center gap-3 mb-2">
-              <div class="w-8 h-8 rounded-full bg-violet-500/15 flex items-center justify-center text-violet-400 text-xs font-bold">
-                C
-              </div>
-              <div class="w-8 h-8 rounded-full bg-sky-500/15 flex items-center justify-center text-sky-400 text-xs font-bold">
-                O
-              </div>
-            </div>
-            <div class="text-xs font-medium text-secondary">
-              Concierge & Orienter ready
-            </div>
-            <div class="text-[10px] mt-0.5 text-muted">
-              Send a message to wake them up
-            </div>
-          </div>
-          <%!-- No session state --%>
-          <div
-            :if={@concierge_card_names == [] && @worker_card_names == [] && !@active_team_id}
-            class="rounded-lg border border-dashed border-subtle py-4 px-4 text-center"
-          >
-            <div class="text-muted text-xs">Start a session to meet your kin</div>
-            <div class="text-[10px] mt-0.5 text-muted">
-              Concierge + Orienter spawn automatically
-            </div>
-          </div>
-
-          <%!-- Ghost cards for dormant kin (not yet spawned) --%>
-          {render_ghost_cards(assigns)}
-
-          <%= if @worker_card_names != [] do %>
-            <div class={[
-              "grid gap-3",
-              card_grid_cols(length(@worker_card_names)),
-              any_agents_active?(@agent_cards, @worker_card_names) && "grid-alive"
-            ]}>
-              <.live_component
-                :for={name <- @worker_card_names}
-                module={LoomkinWeb.AgentCardComponent}
-                id={"agent-card-#{name}"}
-                card={@agent_cards[name]}
-                focused={false}
-                team_id={@active_team_id}
-                model={@agent_cards[name][:model]}
-              />
-            </div>
-          <% end %>
-        </div>
-
-        <%!-- Comms Feed (scrollable, takes remaining space) --%>
-        <div class="flex-1 overflow-auto min-h-0 border-t border-subtle">
-          <LoomkinWeb.AgentCommsComponent.comms_feed
-            stream={@streams.comms_events}
-            event_count={@comms_event_count}
-            id="agent-comms"
-          />
-        </div>
-      <% end %>
-
-      <%!-- Budget bar --%>
-      {render_budget_bar(assigns)}
-
-      <%!-- Last user message echo --%>
-      {render_last_message_strip(assigns)}
-
-      <%!-- Sticky composer --%>
-      {render_input_bar(assigns)}
-
-      <%!-- Queue drawer overlay --%>
-      <.live_component
-        :if={@queue_drawer}
-        module={LoomkinWeb.MessageQueueComponent}
-        id={"queue-drawer-#{@queue_drawer.agent}"}
-        queue={Map.get(@agent_queues, @queue_drawer.agent, [])}
-        agent_name={@queue_drawer.agent}
-        team_id={@queue_drawer.team_id}
-      />
-    </div>
-
-    <%!-- Right: Agent Deep-Focus Panel (w-80, collapsible) --%>
-    <.live_component
-      module={LoomkinWeb.ContextInspectorComponent}
-      id="context-inspector"
-      focused_agent={@focused_agent}
-      focused_card={@focused_card}
-      inspector_mode={@inspector_mode}
-      session_id={@session_id}
-      team_id={@active_team_id}
-    />
-    """
-  end
-
-  defp card_grid_cols(_), do: "grid-cols-2 lg:grid-cols-3"
-
-  defp any_agents_active?(agent_cards, card_names) do
-    Enum.any?(card_names, fn name ->
-      card = agent_cards[name]
-      card && card.content_type in [:thinking, :tool_call, :streaming]
-    end)
-  end
-
-  defp render_ghost_cards(assigns) do
-    active_names = Enum.map(assigns.cached_agents, & &1.name)
-
-    dormant_kin =
-      assigns.kin_agents
-      |> Enum.filter(fn k -> k.enabled && k.name not in active_names end)
-
-    assigns = assign(assigns, dormant_kin: dormant_kin)
-
-    ~H"""
-    <div :if={@dormant_kin != []} class="flex flex-wrap gap-2 mt-2">
-      <button
-        :for={kin <- @dormant_kin}
-        phx-click="spawn_dormant_kin"
-        phx-value-id={kin.id}
-        class="group flex items-center gap-2 px-3 py-2 rounded-lg border border-dashed border-subtle transition-all hover:border-solid hover:bg-surface-2"
-        title={"Spawn #{kin.display_name || kin.name}"}
-      >
-        <span
-          class="w-1.5 h-1.5 rounded-full opacity-50"
-          style={"background: #{kin_potency_color(kin.potency)};"}
-        />
-        <span class="text-xs font-medium opacity-60 group-hover:opacity-100 transition-opacity text-secondary">
-          {kin.display_name || kin.name}
-        </span>
-        <span class="text-[9px] px-1 py-0.5 rounded font-medium opacity-40 bg-brand-muted text-muted">
-          {format_agent_role(kin.role)}
-        </span>
-        <svg
-          class="w-3 h-3 opacity-0 group-hover:opacity-60 transition-opacity text-muted"
-          viewBox="0 0 20 20"
-          fill="currentColor"
-        >
-          <path
-            fill-rule="evenodd"
-            d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z"
-            clip-rule="evenodd"
-          />
-        </svg>
-      </button>
-    </div>
-    """
-  end
-
-  defp kin_potency_color(potency) when is_integer(potency) do
-    cond do
-      potency >= 81 -> "#34d399"
-      potency >= 51 -> "#fbbf24"
-      potency >= 21 -> "#60a5fa"
-      true -> "#71717a"
-    end
-  end
-
-  defp kin_potency_color(_), do: "#60a5fa"
-
-  defp render_budget_bar(assigns) do
-    budget = assigns[:cached_budget] || %{spent: 0.0, limit: 5.0}
-    pct = assigns[:budget_pct] || 0
-    color_class = assigns[:budget_bar_color_class] || "bg-emerald-500"
-
-    assigns =
-      assigns
-      |> assign(:budget, budget)
-      |> assign(:pct, pct)
-      |> assign(:color_class, color_class)
-
-    ~H"""
-    <div class="flex-shrink-0 px-4 py-2 flex items-center gap-3 border-t border-subtle bg-surface-1">
-      <span class="text-[10px] font-semibold text-muted uppercase tracking-widest flex-shrink-0">
-        Budget
-      </span>
-      <div class="flex-1 rounded-full h-1.5 overflow-hidden bg-surface-3">
-        <div
-          class={["h-full rounded-full", @color_class]}
-          style={"width: #{min(@pct, 100)}%; transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);"}
-        >
-        </div>
-      </div>
-      <span class="text-[11px] font-mono tabular-nums flex-shrink-0 text-secondary">
-        ${format_decimal_cost(@budget.spent)}
-        <span class="text-muted">/ ${format_decimal_cost(@budget.limit)}</span>
-      </span>
-    </div>
-    """
-  end
-
+  # budget_pct/1 and budget_bar_color/1 stay here — used by refresh_roster/1 to compute assigns
   defp budget_pct(%{spent: spent, limit: limit}) when limit > 0,
     do: round(spent / limit * 100)
 
@@ -2773,267 +2544,6 @@ defmodule LoomkinWeb.WorkspaceLive do
   end
 
   defp budget_bar_color(_), do: "bg-emerald-500"
-
-  defp format_decimal_cost(n) when is_float(n), do: :erlang.float_to_binary(n, decimals: 2)
-  defp format_decimal_cost(n) when is_integer(n), do: "#{n}.00"
-  defp format_decimal_cost(_), do: "0.00"
-
-  defp render_last_message_strip(%{last_user_message: nil} = assigns) do
-    ~H""
-  end
-
-  defp render_last_message_strip(assigns) do
-    ~H"""
-    <div class="flex-shrink-0 px-4 py-1.5 flex items-center gap-2 overflow-hidden border-t border-subtle bg-surface-1">
-      <span class="text-[10px] font-semibold text-muted uppercase tracking-widest flex-shrink-0">
-        You
-      </span>
-      <span class="text-[10px] flex-shrink-0 text-muted">
-        &rarr;
-      </span>
-      <span class="text-[10px] font-medium flex-shrink-0 text-brand">
-        {@last_user_message.to}
-      </span>
-      <span class="text-[11px] truncate flex-1 min-w-0 text-secondary">
-        {@last_user_message.text}
-      </span>
-    </div>
-    """
-  end
-
-  # --- Shared input bar (used by both modes) ---
-
-  defp render_input_bar(assigns) do
-    agents = assigns[:cached_agents] || []
-    assigns = assign(assigns, :picker_agents, agents)
-
-    ~H"""
-    <div class="flex-shrink-0 bg-surface-1 border-t border-subtle">
-      <form phx-submit="send_message" class="px-3 py-2.5 sm:px-4 sm:py-3">
-        <%!-- Reply indicator --%>
-        <div
-          :if={@reply_target}
-          class="flex items-center gap-2 mb-2 px-2.5 py-1.5 rounded-lg animate-fade-in bg-brand-subtle border border-brand"
-        >
-          <span class="badge px-1.5 py-px text-[10px]">
-            {@reply_target.agent}
-          </span>
-          <span class="text-[11px] text-muted">Replying</span>
-          <button
-            type="button"
-            phx-click="cancel_reply"
-            class="ml-auto rounded-full p-0.5 transition-colors interactive text-muted"
-          >
-            <.icon name="hero-x-mark-mini" class="w-3 h-3" />
-          </button>
-        </div>
-
-        <div class="flex gap-1.5 items-end">
-          <%!-- Agent picker button --%>
-          <div class="relative flex-shrink-0">
-            <button
-              type="button"
-              phx-click="toggle_agent_picker"
-              class={[
-                "flex items-center justify-center h-9 px-2 rounded-lg transition-all duration-200 press-down bg-transparent border",
-                if(@reply_target, do: "border-brand text-brand", else: "border-subtle text-muted")
-              ]}
-              title={if @reply_target, do: @reply_target.agent, else: "Send to team"}
-            >
-              <.icon name="hero-at-symbol-mini" class="w-3.5 h-3.5" />
-              <span :if={@reply_target} class="text-[11px] font-medium ml-1 max-w-[4rem] truncate">
-                {@reply_target.agent}
-              </span>
-            </button>
-
-            <%!-- Agent picker dropdown --%>
-            <div
-              :if={@show_agent_picker}
-              class="card-elevated absolute bottom-full left-0 mb-2 w-52 max-h-60 overflow-y-auto py-1 z-50 animate-scale-in"
-              phx-click-away="close_agent_picker"
-            >
-              <div class="px-2.5 py-1.5 border-b border-subtle">
-                <span class="text-[10px] font-medium uppercase tracking-wider text-muted">
-                  Send to
-                </span>
-              </div>
-              <button
-                type="button"
-                phx-click="select_reply_target"
-                phx-value-agent="team"
-                class={"flex items-center gap-2 w-full px-2.5 py-1.5 text-left text-xs transition-colors interactive text-primary " <> if(!@reply_target, do: "bg-surface-3", else: "")}
-              >
-                <span class="w-1.5 h-1.5 rounded-full flex-shrink-0 bg-emerald-400" />
-                <span class="font-medium">Entire Kin</span>
-              </button>
-              <button
-                :for={agent <- @picker_agents}
-                type="button"
-                phx-click="select_reply_target"
-                phx-value-agent={agent.name}
-                phx-value-team-id={agent.team_id}
-                class={"flex items-center gap-2 w-full px-2.5 py-1.5 text-left text-xs transition-colors interactive " <> if(@reply_target && @reply_target.agent == agent.name, do: "bg-surface-3", else: "")}
-              >
-                <span class={"w-1.5 h-1.5 rounded-full flex-shrink-0 " <> agent_picker_dot_class(agent[:status])} />
-                <span class="truncate" style={"color: #{agent_color(agent.name)};"}>
-                  {agent.name}
-                </span>
-                <span class="ml-auto text-[10px] text-muted">
-                  {agent[:role] || agent[:status]}
-                </span>
-              </button>
-            </div>
-          </div>
-
-          <%!-- Queue button (only shown when replying to an agent) --%>
-          <div :if={@reply_target} class="relative flex-shrink-0">
-            <button
-              type="button"
-              phx-click="toggle_queue_from_composer"
-              class="flex items-center justify-center h-9 px-2 rounded-lg transition-all duration-200 press-down border border-subtle text-muted bg-transparent"
-              title={"View #{@reply_target.agent}'s message queue"}
-            >
-              <svg class="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor">
-                <path d="M2 4.75A.75.75 0 012.75 4h14.5a.75.75 0 010 1.5H2.75A.75.75 0 012 4.75zm0 10.5a.75.75 0 01.75-.75h7.5a.75.75 0 010 1.5h-7.5a.75.75 0 01-.75-.75zM2 10a.75.75 0 01.75-.75h14.5a.75.75 0 010 1.5H2.75A.75.75 0 012 10z" />
-              </svg>
-            </button>
-          </div>
-
-          <%!-- Textarea --%>
-          <div class="flex-1 relative">
-            <textarea
-              name="text"
-              rows="1"
-              placeholder={
-                if @reply_target,
-                  do: "Reply to #{@reply_target.agent}...",
-                  else: "What should we work on?"
-              }
-              class="w-full rounded-lg px-3 py-2 text-sm resize-none focus:outline-none transition-all duration-200 bg-surface-0 border border-subtle text-primary caret-brand"
-              onfocus="this.style.borderColor='var(--border-brand)'; this.style.boxShadow='0 0 0 1px rgba(124, 58, 237, 0.2)';"
-              onblur="this.style.borderColor='var(--border-subtle)'; this.style.boxShadow='none';"
-              phx-hook="ShiftEnterSubmit"
-              id="message-input"
-            ><%= @input_text %></textarea>
-          </div>
-
-          <%!-- Send/Cancel buttons --%>
-          <button
-            :if={@status != :thinking}
-            type="submit"
-            class={"flex items-center justify-center w-9 h-9 rounded-lg transition-all duration-200 press-down " <>
-              if(@status == :idle, do: "text-white", else: "cursor-not-allowed")}
-            style={
-              if @status == :idle,
-                do: "background: var(--brand);",
-                else: "background: var(--surface-2); color: var(--text-muted);"
-            }
-            disabled={@status != :idle}
-          >
-            <svg
-              class="w-3.5 h-3.5"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2.5"
-              viewBox="0 0 24 24"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5"
-              />
-            </svg>
-          </button>
-          <button
-            :if={@status == :thinking}
-            type="button"
-            phx-click="cancel"
-            class="flex items-center justify-center w-9 h-9 rounded-lg transition-all duration-200 press-down"
-            style="background: rgba(248, 113, 113, 0.15); color: #f87171; border: 1px solid rgba(248, 113, 113, 0.3);"
-          >
-            <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
-              <rect x="6" y="6" width="12" height="12" rx="2" />
-            </svg>
-          </button>
-
-          <%!-- Schedule button --%>
-          <div :if={@status != :thinking} class="relative flex-shrink-0">
-            <button
-              type="button"
-              phx-click="toggle_scheduler"
-              class={[
-                "flex items-center justify-center w-9 h-9 rounded-lg transition-all duration-200 press-down bg-transparent border",
-                if(@schedule_popover, do: "border-brand text-brand", else: "border-subtle text-muted")
-              ]}
-              title="Schedule message"
-            >
-              <svg class="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor">
-                <path
-                  fill-rule="evenodd"
-                  d="M10 18a8 8 0 100-16 8 8 0 000 16zm.75-13a.75.75 0 00-1.5 0v5c0 .414.336.75.75.75h4a.75.75 0 000-1.5h-3.25V5z"
-                  clip-rule="evenodd"
-                />
-              </svg>
-            </button>
-
-            <%!-- Schedule popover --%>
-            <LoomkinWeb.ScheduleMessageComponent.schedule_popover
-              :if={@schedule_popover}
-              target_agent={if(@reply_target, do: @reply_target.agent)}
-              content={@input_text}
-              delay_minutes={@schedule_delay_minutes}
-              scheduled_messages={@scheduled_messages}
-            />
-          </div>
-
-          <%!-- Enqueue button (add to queue without sending) --%>
-          <button
-            :if={@status != :thinking && @reply_target}
-            type="button"
-            phx-click="enqueue_message"
-            class="flex items-center justify-center w-9 h-9 rounded-lg transition-all duration-200 press-down border border-subtle text-muted bg-transparent"
-            title={"Add to #{@reply_target.agent}'s queue"}
-          >
-            <svg class="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor">
-              <path d="M10.75 4.75a.75.75 0 00-1.5 0v4.5h-4.5a.75.75 0 000 1.5h4.5v4.5a.75.75 0 001.5 0v-4.5h4.5a.75.75 0 000-1.5h-4.5v-4.5z" />
-            </svg>
-          </button>
-
-          <%!-- Inject guidance button (when agent is working) --%>
-          <button
-            :if={
-              @status != :thinking && @reply_target &&
-                agent_is_working?(@agent_cards, @reply_target.agent)
-            }
-            type="button"
-            phx-click="inject_guidance"
-            class="flex items-center gap-1 h-9 px-2.5 rounded-lg transition-all duration-200 press-down text-[11px] font-medium"
-            style="border: 1px solid rgba(52, 211, 153, 0.3); color: #34d399; background: rgba(52, 211, 153, 0.08);"
-            title={"Guide #{@reply_target.agent} without pausing"}
-          >
-            <svg class="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor">
-              <path
-                fill-rule="evenodd"
-                d="M9.69 18.933l.003.001C9.89 19.02 10 19 10 19s.11.02.308-.066l.002-.001.006-.003.018-.008a5.741 5.741 0 00.281-.14c.186-.096.446-.24.757-.433.62-.384 1.445-.966 2.274-1.765C15.302 14.988 17 12.493 17 9A7 7 0 103 9c0 3.492 1.698 5.988 3.355 7.584a13.731 13.731 0 002.274 1.765 11.307 11.307 0 00.757.433c.11.057.19.095.237.117l.025.012.006.003zm.28-12.182a1.25 1.25 0 10-1.94 1.577 1.25 1.25 0 001.94-1.577zM10 11a2 2 0 100-4 2 2 0 000 4z"
-                clip-rule="evenodd"
-              />
-            </svg>
-            Guide
-          </button>
-        </div>
-
-        <div class="flex items-center gap-3 mt-1 pl-0.5">
-          <span class="text-[10px] text-muted opacity-60">
-            <kbd class="font-mono text-[9px]">&#8679;&#9166;</kbd> new line
-          </span>
-          <span class="text-[10px] text-muted opacity-60">
-            <kbd class="font-mono text-[9px]">/</kbd> focus
-          </span>
-        </div>
-      </form>
-    </div>
-    """
-  end
 
   # --- Helpers ---
 
@@ -3070,76 +2580,7 @@ defmodule LoomkinWeb.WorkspaceLive do
   defp status_label(:executing_tool, tool_name), do: tool_name
   defp status_label(status, _tool), do: to_string(status)
 
-  defp tab_icon(:files),
-    do: raw("<span class=\"hero-folder-mini inline-block w-3.5 h-3.5\"></span>")
-
-  defp tab_icon(:diff),
-    do: raw("<span class=\"hero-code-bracket-mini inline-block w-3.5 h-3.5\"></span>")
-
-  defp tab_icon(:graph),
-    do: raw("<span class=\"hero-share-mini inline-block w-3.5 h-3.5\"></span>")
-
-  defp tab_label(:files), do: "Files"
-  defp tab_label(:diff), do: "Diff"
-  defp tab_label(:graph), do: "Graph"
-
-  defp render_tab(:files, assigns) do
-    ~H"""
-    <div class="flex flex-col h-full">
-      <div class={if @selected_file, do: "h-1/2 overflow-auto", else: "flex-1"}>
-        <.live_component
-          module={LoomkinWeb.FileTreeComponent}
-          id="file-tree"
-          project_path={assigns[:explorer_path] || assigns[:project_path] || File.cwd!()}
-          session_id={@session_id}
-          version={@file_tree_version}
-        />
-      </div>
-      <div :if={@selected_file} class="h-1/2 border-t border-gray-800 flex flex-col animate-fade-in">
-        <div class="flex items-center justify-between px-3 py-2 bg-gray-900/80 border-b border-gray-800">
-          <div class="flex items-center gap-2 truncate">
-            <.icon name="hero-document-text-mini" class="w-3.5 h-3.5 text-violet-400 flex-shrink-0" />
-            <span class="text-xs text-violet-400 font-mono truncate">{@selected_file}</span>
-          </div>
-          <button
-            phx-click="deselect_file"
-            class="text-gray-500 hover:text-gray-300 text-xs p-1 rounded hover:bg-gray-800 transition-colors"
-          >
-            <.icon name="hero-x-mark-mini" class="w-3.5 h-3.5" />
-          </button>
-        </div>
-        <div
-          id={"file-preview-#{@selected_file}"}
-          phx-hook="SyntaxHighlight"
-          class="flex-1 overflow-auto file-preview-container"
-        >
-          <pre class="file-preview-pre"><code class={"language-#{language_from_path(@selected_file)}"}>{@file_content}</code></pre>
-        </div>
-      </div>
-    </div>
-    """
-  end
-
-  defp render_tab(:diff, assigns) do
-    ~H"""
-    <.live_component
-      module={LoomkinWeb.DiffComponent}
-      id="diff-viewer"
-      diffs={@diffs}
-    />
-    """
-  end
-
-  defp render_tab(:graph, assigns) do
-    ~H"""
-    <.live_component
-      module={LoomkinWeb.DecisionGraphComponent}
-      id="decision-graph"
-      session_id={@session_id}
-      team_id={@active_team_id}
-    />
-    """
-  end
+  # tab_icon/1, tab_label/1, render_tab/2 moved to SidebarPanelComponent
 
   defp route_permission_response(_socket, action, %{source: {:agent, team_id, agent_name}} = req) do
     case Loomkin.Teams.Manager.find_agent(team_id, agent_name) do
@@ -4334,23 +3775,12 @@ defmodule LoomkinWeb.WorkspaceLive do
 
   defp trackable_agent_name(_), do: nil
 
-  defp agent_picker_dot_class(:idle), do: "bg-green-400"
-  defp agent_picker_dot_class(:thinking), do: "bg-violet-400 status-dot-thinking"
-  defp agent_picker_dot_class(:executing_tool), do: "bg-blue-400"
-  defp agent_picker_dot_class(:error), do: "bg-red-400"
-  defp agent_picker_dot_class(:blocked), do: "bg-amber-400"
-  defp agent_picker_dot_class(_), do: "bg-gray-400"
-
-  defp agent_color(name), do: LoomkinWeb.AgentColors.agent_color(name)
+  # agent_picker_dot_class/1, agent_color/1 moved to ComposerComponent
 
   defp short_team_id(id) when is_binary(id), do: String.slice(id, 0, 8)
   defp short_team_id(_), do: "?"
 
-  defp format_agent_role(role) when is_atom(role) or is_binary(role) do
-    role |> to_string() |> String.replace("_", " ") |> String.capitalize()
-  end
-
-  defp format_agent_role(_), do: "-"
+  # format_agent_role/1 moved to MissionControlPanelComponent
 
   defp do_switch_project(socket, path) do
     team_id = socket.assigns[:team_id]
@@ -4422,25 +3852,7 @@ defmodule LoomkinWeb.WorkspaceLive do
   defp format_llm_error(reason) when is_binary(reason), do: reason
   defp format_llm_error(reason), do: inspect(reason)
 
-  # Map file extensions to highlight.js language names
-  defp language_from_path(nil), do: "plaintext"
-
-  defp language_from_path(path) do
-    case Path.extname(path) do
-      ext when ext in [".ex", ".exs"] -> "elixir"
-      ".js" -> "javascript"
-      ".json" -> "json"
-      ext when ext in [".sh", ".bash", ".zsh"] -> "bash"
-      ".css" -> "css"
-      ext when ext in [".html", ".heex", ".leex"] -> "html"
-      ".xml" -> "xml"
-      ".md" -> "markdown"
-      ext when ext in [".yml", ".yaml"] -> "yaml"
-      ".diff" -> "diff"
-      ".toml" -> "elixir"
-      _ -> "plaintext"
-    end
-  end
+  # language_from_path/1 moved to SidebarPanelComponent
 
   # --- Ask User helpers ---
 
@@ -4539,160 +3951,7 @@ defmodule LoomkinWeb.WorkspaceLive do
     end
   end
 
-  # --- Command Palette ---
-
-  defp build_palette_results(socket, query) do
-    q = String.downcase(String.trim(query))
-
-    agents =
-      (socket.assigns[:cached_agents] || [])
-      |> Enum.map(fn a ->
-        %{type: :agent, label: a[:name] || "unknown", detail: "Agent", value: a[:name] || ""}
-      end)
-
-    tabs =
-      Enum.map([:files, :diff, :graph], fn tab ->
-        %{
-          type: :tab,
-          label: Atom.to_string(tab),
-          detail: "Inspector Tab",
-          value: Atom.to_string(tab)
-        }
-      end)
-
-    sub_tabs =
-      Enum.map([:activity, :cost, :graph], fn tab ->
-        %{
-          type: :sub_tab,
-          label: Atom.to_string(tab),
-          detail: "Kin Sub-tab",
-          value: Atom.to_string(tab)
-        }
-      end)
-
-    actions = [
-      %{
-        type: :action,
-        label: "Toggle Mode (Solo/Mission Control)",
-        detail: "Action",
-        value: "toggle_mode"
-      },
-      %{type: :action, label: "Switch Project", detail: "Action", value: "switch_project"},
-      %{type: :action, label: "Focus Input", detail: "Action", value: "focus_input"},
-      %{
-        type: :action,
-        label: "Refresh Channel Bindings",
-        detail: "Channels",
-        value: "refresh_channels"
-      }
-    ]
-
-    all = agents ++ tabs ++ sub_tabs ++ actions
-
-    if q == "" do
-      all
-    else
-      Enum.filter(all, fn item ->
-        String.contains?(String.downcase(item.label), q) ||
-          String.contains?(String.downcase(item.detail), q)
-      end)
-    end
-  end
-
-  defp render_command_palette(assigns) do
-    ~H"""
-    <div
-      :if={@command_palette_open}
-      class="fixed inset-0 z-50 flex items-start justify-center pt-[15vh]"
-      phx-click="close_command_palette"
-    >
-      <div class="fixed inset-0 bg-black/60" />
-      <div
-        class="relative w-full max-w-lg card-elevated overflow-hidden"
-        style="box-shadow: 0 16px 64px rgba(0,0,0,0.6), 0 0 0 1px var(--border-default);"
-        phx-click-away="close_command_palette"
-        phx-hook="CommandPalette"
-        id="command-palette"
-      >
-        <div class="flex items-center gap-2 px-4 py-3 border-b border-subtle">
-          <svg
-            class="w-4 h-4 flex-shrink-0 text-muted"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            viewBox="0 0 24 24"
-          >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-            />
-          </svg>
-          <input
-            type="text"
-            id="command-palette-input"
-            placeholder="Search agents, tabs, actions..."
-            value={@command_palette_query}
-            phx-keyup="palette_search"
-            name="query"
-            class="flex-1 bg-transparent text-sm outline-none text-primary caret-brand"
-            autocomplete="off"
-            phx-debounce="100"
-          />
-          <kbd class="px-1.5 py-0.5 text-[10px] font-mono rounded bg-surface-2 text-muted">
-            Esc
-          </kbd>
-        </div>
-
-        <div class="max-h-72 overflow-y-auto py-1">
-          <div
-            :if={@command_palette_results == []}
-            class="px-4 py-6 text-center text-sm text-muted"
-          >
-            No results found
-          </div>
-          <button
-            :for={item <- @command_palette_results}
-            data-palette-item
-            phx-click="palette_select"
-            phx-value-type={item.type}
-            phx-value-value={item.value}
-            class="flex items-center justify-between w-full px-4 py-2 text-left text-sm transition-colors interactive"
-          >
-            <div class="flex items-center gap-2 min-w-0">
-              <span class={palette_icon_class(item.type)} />
-              <span class="truncate text-secondary">{item.label}</span>
-            </div>
-            <span class="text-xs flex-shrink-0 ml-2 text-muted">
-              {item.detail}
-            </span>
-          </button>
-        </div>
-
-        <div class="flex items-center gap-4 px-4 py-2 text-[10px] border-t border-subtle text-muted opacity-70">
-          <span>
-            <kbd class="px-1 py-0.5 rounded font-mono bg-surface-2">↑↓</kbd> navigate
-          </span>
-          <span>
-            <kbd class="px-1 py-0.5 rounded font-mono bg-surface-2">
-              Enter
-            </kbd>
-            select
-          </span>
-          <span>
-            <kbd class="px-1 py-0.5 rounded font-mono bg-surface-2">Esc</kbd> close
-          </span>
-        </div>
-      </div>
-    </div>
-    """
-  end
-
-  defp palette_icon_class(:agent), do: "w-2 h-2 rounded-full bg-violet-400"
-  defp palette_icon_class(:tab), do: "w-2 h-2 rounded-sm bg-blue-400"
-  defp palette_icon_class(:sub_tab), do: "w-2 h-2 rounded-sm bg-emerald-400"
-  defp palette_icon_class(:action), do: "w-2 h-2 rounded-full bg-amber-400"
-  defp palette_icon_class(_), do: "w-2 h-2 rounded-full bg-gray-400"
+  # Command palette render + helpers moved to CommandPaletteComponent
 
   defp load_channel_bindings(nil), do: []
 
@@ -4705,10 +3964,5 @@ defmodule LoomkinWeb.WorkspaceLive do
     end
   end
 
-  defp agent_is_working?(agent_cards, agent_name) do
-    case Map.get(agent_cards, agent_name) do
-      %{status: :working} -> true
-      _ -> false
-    end
-  end
+  # agent_is_working?/2 moved to ComposerComponent
 end

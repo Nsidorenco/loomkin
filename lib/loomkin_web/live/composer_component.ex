@@ -74,6 +74,11 @@ defmodule LoomkinWeb.ComposerComponent do
     {:noreply, socket}
   end
 
+  def handle_event("inject_guidance", params, socket) do
+    send(self(), {:composer_event, "inject_guidance", params})
+    {:noreply, socket}
+  end
+
   @impl true
   def render(assigns) do
     agents = assigns[:cached_agents] || []
@@ -284,6 +289,29 @@ defmodule LoomkinWeb.ComposerComponent do
               <path d="M10.75 4.75a.75.75 0 00-1.5 0v4.5h-4.5a.75.75 0 000 1.5h4.5v4.5a.75.75 0 001.5 0v-4.5h4.5a.75.75 0 000-1.5h-4.5v-4.5z" />
             </svg>
           </button>
+
+          <%!-- Inject guidance button (when agent is working) --%>
+          <button
+            :if={
+              @status != :thinking && @reply_target &&
+                agent_is_working?(assigns[:agent_cards] || %{}, @reply_target.agent)
+            }
+            type="button"
+            phx-click="inject_guidance"
+            phx-target={@myself}
+            class="flex items-center gap-1 h-9 px-2.5 rounded-lg transition-all duration-200 press-down text-[11px] font-medium"
+            style="border: 1px solid rgba(52, 211, 153, 0.3); color: #34d399; background: rgba(52, 211, 153, 0.08);"
+            title={"Guide #{@reply_target.agent} without pausing"}
+          >
+            <svg class="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor">
+              <path
+                fill-rule="evenodd"
+                d="M9.69 18.933l.003.001C9.89 19.02 10 19 10 19s.11.02.308-.066l.002-.001.006-.003.018-.008a5.741 5.741 0 00.281-.14c.186-.096.446-.24.757-.433.62-.384 1.445-.966 2.274-1.765C15.302 14.988 17 12.493 17 9A7 7 0 103 9c0 3.492 1.698 5.988 3.355 7.584a13.731 13.731 0 002.274 1.765 11.307 11.307 0 00.757.433c.11.057.19.095.237.117l.025.012.006.003zm.28-12.182a1.25 1.25 0 10-1.94 1.577 1.25 1.25 0 001.94-1.577zM10 11a2 2 0 100-4 2 2 0 000 4z"
+                clip-rule="evenodd"
+              />
+            </svg>
+            Guide
+          </button>
         </div>
 
         <div class="flex items-center gap-3 mt-1 pl-0.5">
@@ -369,4 +397,11 @@ defmodule LoomkinWeb.ComposerComponent do
   defp format_decimal_cost(n) when is_float(n), do: :erlang.float_to_binary(n, decimals: 2)
   defp format_decimal_cost(n) when is_integer(n), do: "#{n}.00"
   defp format_decimal_cost(_), do: "0.00"
+
+  defp agent_is_working?(agent_cards, agent_name) do
+    case Map.get(agent_cards, agent_name) do
+      %{status: :working} -> true
+      _ -> false
+    end
+  end
 end

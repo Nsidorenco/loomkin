@@ -155,7 +155,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Monolith Extraction | 3/5 | In Progress|  |
+| 1. Monolith Extraction | 4/5 | In Progress|  |
 | 2. Signal Infrastructure | 0/TBD | Not started | - |
 | 3. Live Comms Feed | 0/TBD | Not started | - |
 | 4. Task Graph & Crash Recovery | 0/TBD | Not started | - |

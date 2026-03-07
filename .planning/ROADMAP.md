@@ -75,7 +75,7 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 03-01-PLAN.md — Peer message signal pipeline, TeamBroadcaster critical classification, stream cap, type config
+- [x] 03-01-PLAN.md — Peer message signal pipeline, TeamBroadcaster critical classification, stream cap, type config
 - [ ] 03-02-PLAN.md — Team badges, auto-scroll JS hook, card insertion/removal animations, visual verification
 
 ### Phase 4: Task Graph & Crash Recovery

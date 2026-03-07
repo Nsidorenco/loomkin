@@ -73,8 +73,8 @@
 | FOUN-01 | Phase 1 — Monolith Extraction | Complete |
 | FOUN-02 | Phase 2 — Signal Infrastructure | Complete |
 | FOUN-03 | Phase 2 — Signal Infrastructure | Complete |
-| VISB-01 | Phase 3 — Live Comms Feed | Pending |
-| VISB-02 | Phase 3 — Live Comms Feed | Pending |
+| VISB-01 | Phase 3 — Live Comms Feed | In Progress (03-01 complete) |
+| VISB-02 | Phase 3 — Live Comms Feed | In Progress (03-01 complete) |
 | VISB-03 | Phase 4 — Task Graph & Crash Recovery | Pending |
 | VISB-04 | Phase 4 — Task Graph & Crash Recovery | Pending |
 | INTV-01 | Phase 5 — Chat Injection & State Machines | Pending |

@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: in-progress
-stopped_at: Completed 02-04-PLAN.md
-last_updated: "2026-03-07T23:16:32Z"
-last_activity: 2026-03-07 — Completed 02-04 gap closure direct bus subscription removal
+stopped_at: Completed 03-01-PLAN.md
+last_updated: "2026-03-07T23:51:00.000Z"
+last_activity: 2026-03-07 — Completed 03-01 peer message signal pipeline
 progress:
   total_phases: 10
-  completed_phases: 1
-  total_plans: 9
-  completed_plans: 10
-  percent: 20
+  completed_phases: 2
+  total_plans: 10
+  completed_plans: 11
+  percent: 23
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-07)
 
 **Core value:** Humans can see exactly what agents are doing and saying to each other in real-time, and intervene naturally at any moment — without breaking the autonomous flow.
-**Current focus:** Phase 2 — Signal Infrastructure
+**Current focus:** Phase 3 — Live Comms Feed
 
 ## Current Position
 
-Phase: 2 of 10 (Signal Infrastructure)
-Plan: 4 of 4 in current phase
-Status: Phase 02 complete, ready for Phase 3
-Last activity: 2026-03-07 — Completed 02-04 gap closure direct bus subscription removal
+Phase: 3 of 10 (Live Comms Feed)
+Plan: 1 of ? in current phase
+Status: Completed 03-01 peer message signal pipeline
+Last activity: 2026-03-07 — Completed 03-01 peer message signal pipeline
 
-Progress: [##░░░░░░░░] 20%
+Progress: [##░░░░░░░░] 23%
 
 ## Performance Metrics
 
@@ -50,6 +50,7 @@ Progress: [##░░░░░░░░] 20%
 - Trend: -
 
 *Updated after each plan completion*
+| Phase 03-live-comms-feed P01 | 5 | 2 tasks | 5 files |
 | Phase 02-signal-infrastructure P04 | 2 | 2 tasks | 1 files |
 | Phase 02-signal-infrastructure P03 | 4 | 2 tasks | 2 files |
 | Phase 02-signal-infrastructure P02 | 3 | 2 tasks | 3 files |
@@ -83,6 +84,9 @@ Recent decisions affecting current work:
 - [Phase 02-02]: Critical signal types defined as MapSet constant for O(1) lookup; direct send/2 delivery matching Jido pattern
 - [Phase 02-03]: workspace_live uses send(self(), {:signal, sig}) dispatch from batch handler to reuse existing handle_info clauses; subscribe_global_signals and signal_for_workspace? fully removed
 - [Phase 02-04]: removed last two direct Loomkin.Signals.subscribe calls from workspace_live; all signal delivery now exclusively through TeamBroadcaster
+- [Phase 03-01]: peer messages classified as critical signals for sub-1-second delivery via TeamBroadcaster
+- [Phase 03-01]: stream limit: -500 caps comms events DOM to 500 most recent items
+- [Phase 03-01]: blue accent for peer_message type distinct from cyan channel_message
 
 ### Pending Todos
 
@@ -97,6 +101,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-07T23:16:32Z
-Stopped at: Completed 02-04-PLAN.md
-Resume file: .planning/phases/02-signal-infrastructure/02-04-SUMMARY.md
+Last session: 2026-03-07T23:51:00.000Z
+Stopped at: Completed 03-01-PLAN.md
+Resume file: .planning/phases/03-live-comms-feed/03-01-SUMMARY.md

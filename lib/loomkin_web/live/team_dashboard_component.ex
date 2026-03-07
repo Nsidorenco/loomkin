@@ -151,11 +151,13 @@ defmodule LoomkinWeb.TeamDashboardComponent do
      |> schedule_reload(agent_name)}
   end
 
-  def handle_info({:reload_dashboard, agent_name}, socket) do
+  def handle_info(:reload_dashboard, socket) do
+    dirty = socket.assigns[:dirty_agents] || MapSet.new()
+
     {:noreply,
      socket
-     |> assign(:reload_timer, nil)
-     |> reload_tasks(agent_name)}
+     |> assign(reload_timer: nil, dirty_agents: MapSet.new())
+     |> reload_tasks(dirty)}
   end
 
   def handle_info(_msg, socket) do
@@ -167,18 +169,24 @@ defmodule LoomkinWeb.TeamDashboardComponent do
       Process.cancel_timer(timer)
     end
 
-    timer = Process.send_after(self(), {:reload_dashboard, agent_name}, 500)
-    assign(socket, :reload_timer, timer)
+    dirty = socket.assigns[:dirty_agents] || MapSet.new()
+    dirty = MapSet.put(dirty, agent_name)
+    timer = Process.send_after(self(), :reload_dashboard, 500)
+    assign(socket, reload_timer: timer, dirty_agents: dirty)
   end
 
-  defp reload_tasks(socket, agent_name) do
+  defp reload_tasks(socket, dirty_agents) do
     team_id = socket.assigns.team_id
     tasks = Tasks.list_all(team_id)
-    current_task = find_agent_current_task(team_id, agent_name)
 
     agents =
       Enum.map(socket.assigns.agents, fn agent ->
-        if agent.name == agent_name, do: %{agent | current_task: current_task}, else: agent
+        if MapSet.member?(dirty_agents, agent.name) do
+          current_task = find_agent_current_task(team_id, agent.name)
+          %{agent | current_task: current_task}
+        else
+          agent
+        end
       end)
 
     summary = CostTracker.team_cost_summary(team_id)

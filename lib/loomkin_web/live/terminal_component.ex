@@ -6,19 +6,14 @@ defmodule LoomkinWeb.TerminalComponent do
   def update(assigns, socket) do
     commands = assigns[:commands] || []
     capped = Enum.take(commands, -@max_commands)
-    next_id = socket.assigns[:next_cmd_id] || 0
+    # Each command gets a stable monotonic ID based on its position in the
+    # ever-growing list. New commands appended to the tail get new IDs while
+    # existing commands keep theirs. This avoids duplicate DOM IDs when two
+    # commands have identical content.
+    total_seen = length(assigns[:commands] || [])
+    base_id = max(total_seen - length(capped), 0)
 
-    # Reuse previously assigned IDs for commands already seen
-    prev_indexed = socket.assigns[:indexed_commands] || []
-    prev_lookup = Map.new(prev_indexed, fn {id, cmd} -> {cmd, id} end)
-
-    {indexed, next_id} =
-      Enum.map_reduce(capped, next_id, fn cmd, id_counter ->
-        case Map.get(prev_lookup, cmd) do
-          nil -> {{id_counter, cmd}, id_counter + 1}
-          existing_id -> {{existing_id, cmd}, id_counter}
-        end
-      end)
+    indexed = capped |> Enum.with_index(base_id) |> Enum.map(fn {cmd, id} -> {id, cmd} end)
 
     {:ok,
      socket
@@ -26,7 +21,7 @@ defmodule LoomkinWeb.TerminalComponent do
      |> assign(
        commands: capped,
        indexed_commands: indexed,
-       next_cmd_id: next_id
+       cmd_base_id: base_id
      )}
   end
 

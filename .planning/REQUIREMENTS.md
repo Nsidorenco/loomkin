@@ -20,10 +20,10 @@
 
 ### Human Intervention
 
-- [ ] **INTV-01**: Human can broadcast a chat message to the entire team conversation (not just reply-to-agent)
+- [x] **INTV-01**: Human can broadcast a chat message to the entire team conversation (not just reply-to-agent)
 - [ ] **INTV-02**: Approval gates where agents pause at critical junctures and await human sign-off (distinct signal type from permission hooks)
 - [ ] **INTV-03**: Agents auto-ask human when uncertain via confidence-threshold triggers from AgentLoop
-- [ ] **INTV-04**: Typed state machine separates pause vs permission vs approval gate states to prevent clobbering
+- [x] **INTV-04**: Typed state machine separates pause vs permission vs approval gate states to prevent clobbering
 
 ### Dynamic Tree
 
@@ -77,8 +77,8 @@
 | VISB-02 | Phase 3 — Live Comms Feed | In Progress (03-01 complete) |
 | VISB-03 | Phase 4 — Task Graph & Crash Recovery | Complete |
 | VISB-04 | Phase 4 — Task Graph & Crash Recovery | In Progress (04-01 signals complete) |
-| INTV-01 | Phase 5 — Chat Injection & State Machines | Pending |
-| INTV-04 | Phase 5 — Chat Injection & State Machines | Pending |
+| INTV-01 | Phase 5 — Chat Injection & State Machines | Complete |
+| INTV-04 | Phase 5 — Chat Injection & State Machines | Complete |
 | INTV-02 | Phase 6 — Approval Gates | Pending |
 | INTV-03 | Phase 7 — Confidence Triggers | Pending |
 | TREE-01 | Phase 8 — Dynamic Tree Visibility | Pending |

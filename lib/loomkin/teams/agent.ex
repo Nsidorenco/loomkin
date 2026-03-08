@@ -44,6 +44,7 @@ defmodule Loomkin.Teams.Agent do
     pending_updates: [],
     priority_queue: [],
     pause_requested: false,
+    pause_queued: false,
     paused_state: nil,
     subscription_ids: []
   ]
@@ -65,6 +66,14 @@ defmodule Loomkin.Teams.Agent do
   @doc "Send a user message to this agent and get the response."
   def send_message(pid, text) when is_pid(pid) do
     GenServer.call(pid, {:send_message, text}, :infinity)
+  end
+
+  @doc """
+  Injects a broadcast message into a paused agent's message history.
+  If the agent is not paused (no paused_state), falls back to send_message/2.
+  """
+  def inject_broadcast(pid, text) when is_pid(pid) do
+    GenServer.call(pid, {:inject_broadcast, text})
   end
 
   @doc "Assign a task to this agent."

@@ -2753,6 +2753,8 @@ defmodule LoomkinWeb.WorkspaceLive do
               session_id={@session_id}
               status={@status}
               agent_cards={@agent_cards}
+              broadcast_mode={@broadcast_mode}
+              agent_count={length(@cached_agents)}
             />
 
             <%!-- Queue drawer overlay --%>

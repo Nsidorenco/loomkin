@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: completed
-stopped_at: Completed 04-03-PLAN.md
-last_updated: "2026-03-08T02:25:00.000Z"
-last_activity: 2026-03-08 — Completed 04-03 crash recovery ui wiring (agent card crash states, comms events, signal handlers)
+stopped_at: Completed 05-00-PLAN.md
+last_updated: "2026-03-08T05:22:11.856Z"
+last_activity: 2026-03-08 — Created 28 pending test stubs across 5 files for phase 5 tdd targets
 progress:
   total_phases: 10
   completed_phases: 4
-  total_plans: 15
-  completed_plans: 15
-  percent: 29
+  total_plans: 20
+  completed_plans: 17
+  percent: 85
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-07)
 
 **Core value:** Humans can see exactly what agents are doing and saying to each other in real-time, and intervene naturally at any moment — without breaking the autonomous flow.
-**Current focus:** Phase 4 — Task Graph & Crash Recovery
+**Current focus:** Phase 5 — Chat Injection & State Machines
 
 ## Current Position
 
-Phase: 4 of 10 (Task Graph & Crash Recovery) - COMPLETE
-Plan: 3 of 3 in current phase (COMPLETE)
-Status: Completed 04-03 crash recovery ui wiring
-Last activity: 2026-03-08 — Completed 04-03 crash recovery ui wiring (agent card crash states, comms events, signal handlers)
+Phase: 5 of 10 (Chat Injection & State Machines)
+Plan: 1 of 4 in current phase
+Status: Completed 05-00 test stub files
+Last activity: 2026-03-08 — Created 28 pending test stubs across 5 files for phase 5 tdd targets
 
-Progress: [██████████] 100%
+Progress: [█████████░] 85%
 
 ## Performance Metrics
 
@@ -63,6 +63,7 @@ Progress: [██████████] 100%
 | Phase 04-task-graph-crash-recovery P01 | 5 | 2 tasks | 5 files |
 | Phase 04 P02 | 5 | 2 tasks | 5 files |
 | Phase 04 P03 | 8 | 3 tasks | 3 files |
+| Phase 05 P00 | 2 | 1 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -99,6 +100,7 @@ Recent decisions affecting current work:
 - [Phase 04]: Used tasks_override/deps_override assigns for component testing without DB queries
 - [Phase 04-03]: Reuse card-error class for all crash states (crashed, recovering, permanently_failed)
 - [Phase 04-03]: 2-second Process.send_after delay for recovering->idle transition
+- [Phase 05]: test stubs already existed on branch from prior work; verified correctness rather than recreating
 
 ### Pending Todos
 
@@ -113,6 +115,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-08T02:25:00Z
-Stopped at: Completed 04-03-PLAN.md
+Last session: 2026-03-08T05:22:11.854Z
+Stopped at: Completed 05-00-PLAN.md
 Resume file: None

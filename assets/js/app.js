@@ -565,6 +565,27 @@ Hooks.CommsFeedScroll = {
   }
 }
 
+// CountdownTimer: ticks down from data-deadline-at (wall-clock ms) to zero, clears interval on destroy
+Hooks.CountdownTimer = {
+  mounted() {
+    this.tick()
+    this.intervalId = setInterval(() => this.tick(), 1000)
+  },
+  tick() {
+    const deadline = parseInt(this.el.dataset.deadlineAt, 10)
+    const remaining = Math.max(0, Math.ceil((deadline - Date.now()) / 1000))
+    const minutes = Math.floor(remaining / 60)
+    const seconds = remaining % 60
+    this.el.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`
+    if (remaining === 0) {
+      clearInterval(this.intervalId)
+    }
+  },
+  destroyed() {
+    clearInterval(this.intervalId)
+  }
+}
+
 Hooks.SortableQueue = {
   mounted() {
     this.initSortable()

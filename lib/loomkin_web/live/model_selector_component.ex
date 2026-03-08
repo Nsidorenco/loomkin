@@ -413,9 +413,19 @@ defmodule LoomkinWeb.ModelSelectorComponent do
                 <span class="text-[10px]" style="color: rgba(52, 211, 153, 0.7);">API Key</span>
               </span>
             <% {:oauth, :connected} -> %>
-              <span class="flex items-center gap-1">
+              <span class="flex items-center gap-1.5">
                 <span class="w-1.5 h-1.5 rounded-full bg-brand"></span>
                 <span class="text-[10px] text-brand opacity-70">OAuth</span>
+                <button
+                  type="button"
+                  phx-click="disconnect_oauth"
+                  phx-value-provider={@provider_atom}
+                  phx-target={@myself}
+                  class="text-[10px] text-muted hover:text-secondary transition-colors cursor-pointer leading-none"
+                  title="Disconnect"
+                >
+                  &times;
+                </button>
               </span>
             <% {:oauth, :disconnected} -> %>
               <span class="flex items-center gap-1">
@@ -696,6 +706,19 @@ defmodule LoomkinWeb.ModelSelectorComponent do
 
   def handle_event("submit_paste_code", _params, socket) do
     {:noreply, assign(socket, paste_back_error: "Please paste the code first.")}
+  end
+
+  def handle_event("disconnect_oauth", %{"provider" => provider}, socket) do
+    provider_atom = String.to_existing_atom(provider)
+    Loomkin.Auth.TokenStore.revoke_tokens(provider_atom)
+    {active, unconfigured, all} = load_providers()
+
+    {:noreply,
+     assign(socket,
+       active_providers: active,
+       unconfigured_providers: unconfigured,
+       all_providers: all
+     )}
   end
 
   def handle_event("cancel_paste", _params, socket) do

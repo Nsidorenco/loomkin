@@ -409,6 +409,8 @@ defmodule Loomkin.Session do
 
     case state.architect_task do
       {%Task{ref: ^ref}, from} ->
+        require Logger
+        Logger.error("[Kin:session] llm error session=#{state.id} reason=#{inspect(reason)}")
         broadcast(state.id, {:llm_error, state.id, format_error(reason)})
         state = %{state | architect_task: nil}
         state = update_status(state, :idle)
@@ -427,6 +429,8 @@ defmodule Loomkin.Session do
 
     case state.architect_task do
       {%Task{ref: ^ref}, from} ->
+        require Logger
+        Logger.error("[Kin:session] llm error session=#{state.id} reason=#{inspect(reason)}")
         broadcast(state.id, {:llm_error, state.id, format_error(reason)})
         state = %{state | messages: new_state.messages, architect_task: nil}
         state = update_status(state, :idle)
@@ -443,6 +447,12 @@ defmodule Loomkin.Session do
   def handle_info({:DOWN, ref, :process, _pid, reason}, state) when is_reference(ref) do
     case state.architect_task do
       {%Task{ref: ^ref}, from} ->
+        require Logger
+
+        Logger.error(
+          "[Kin:session] architect crashed session=#{state.id} reason=#{inspect(reason)}"
+        )
+
         broadcast(state.id, {:llm_error, state.id, "Architect crashed: #{inspect(reason)}"})
         state = %{state | architect_task: nil}
         state = update_status(state, :idle)

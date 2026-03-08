@@ -4,12 +4,13 @@ defmodule LoomkinWeb.ChatComponent do
   def mount(socket) do
     {:ok,
      socket
-     |> assign(msg_count: 0, has_messages: false)
+     |> assign(msg_count: 0, has_messages: false, failed_message_idx: nil)
      |> stream(:messages, [])}
   end
 
   def update(assigns, socket) do
     old_count = socket.assigns.msg_count
+    old_failed_idx = socket.assigns[:failed_message_idx]
     messages = assigns[:messages] || []
     new_count = length(messages)
 
@@ -36,7 +37,38 @@ defmodule LoomkinWeb.ChatComponent do
           socket
       end
 
-    {:ok, assign(socket, msg_count: new_count, has_messages: new_count > 0)}
+    new_failed_idx = assigns[:failed_message_idx]
+
+    socket =
+      cond do
+        new_failed_idx != nil && new_failed_idx != old_failed_idx ->
+          failed_msg =
+            messages
+            |> Enum.at(new_failed_idx)
+            |> Map.put(:id, "msg-#{new_failed_idx}")
+
+          stream_insert(socket, :messages, failed_msg)
+
+        old_failed_idx != nil && new_failed_idx != old_failed_idx ->
+          restored_msg =
+            messages
+            |> Enum.at(old_failed_idx)
+            |> then(fn msg ->
+              if msg, do: Map.put(msg, :id, "msg-#{old_failed_idx}"), else: nil
+            end)
+
+          if restored_msg, do: stream_insert(socket, :messages, restored_msg), else: socket
+
+        true ->
+          socket
+      end
+
+    {:ok,
+     assign(socket,
+       msg_count: new_count,
+       has_messages: new_count > 0,
+       failed_message_idx: new_failed_idx
+     )}
   end
 
   defp wrap_messages(messages, start_idx) do
@@ -49,6 +81,11 @@ defmodule LoomkinWeb.ChatComponent do
 
   def handle_event("select_prompt", %{"prompt" => prompt}, socket) do
     send(self(), {:select_prompt, prompt})
+    {:noreply, socket}
+  end
+
+  def handle_event("resend_message", %{"content" => content}, socket) do
+    send(self(), {:resend_message, content})
     {:noreply, socket}
   end
 
@@ -108,8 +145,21 @@ defmodule LoomkinWeb.ChatComponent do
             <%= case msg.role do %>
               <% :user -> %>
                 <div class="flex items-start gap-3 justify-end max-w-[80%] ml-auto">
-                  <div class="bg-gray-700/80 rounded-2xl px-4 py-2.5 text-sm shadow-sm">
+                  <div class={"bg-gray-700/80 rounded-2xl px-4 py-2.5 text-sm shadow-sm #{if msg[:failed], do: "border border-red-500/40", else: ""}"}>
                     <p class="whitespace-pre-wrap leading-relaxed">{msg.content}</p>
+                    <%= if msg[:failed] do %>
+                      <div class="flex items-center justify-between mt-2 pt-2 border-t border-red-500/20">
+                        <span class="text-xs text-red-400">Failed to send</span>
+                        <button
+                          phx-click="resend_message"
+                          phx-value-content={msg.content}
+                          phx-target={@myself}
+                          class="text-xs text-red-400 hover:text-red-300 underline ml-3 cursor-pointer"
+                        >
+                          Retry
+                        </button>
+                      </div>
+                    <% end %>
                   </div>
                   <div class="w-7 h-7 rounded-full bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center flex-shrink-0 shadow-sm">
                     <span class="text-xs font-bold text-white">U</span>

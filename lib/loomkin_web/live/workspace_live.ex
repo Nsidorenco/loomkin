@@ -2663,8 +2663,36 @@ defmodule LoomkinWeb.WorkspaceLive do
             active_team_id={@active_team_id}
           />
 
-          <%!-- Composer below the mission control panel --%>
-          <div class="flex-shrink-0 border-r border-subtle">
+          <%!-- Chat + Composer column --%>
+          <div class="flex-1 flex flex-col min-w-0 min-h-0 border-r border-subtle">
+            <div class="flex-1 overflow-auto min-h-0">
+              <.live_component
+                module={LoomkinWeb.ChatComponent}
+                id="chat"
+                messages={@messages}
+                status={@status}
+                current_tool={@current_tool}
+                streaming={@streaming}
+                streaming_content={@streaming_content}
+                architect_phase={@architect_phase}
+                plan_steps={@plan_steps}
+                current_step={@current_step}
+                failed_message_idx={@failed_message_idx}
+              />
+            </div>
+
+            <%!-- Pending ask_user questions --%>
+            <div
+              :if={@pending_questions != []}
+              class="flex-shrink-0 px-3 py-2 border-t border-brand bg-surface-1"
+            >
+              <.live_component
+                module={LoomkinWeb.AskUserComponent}
+                id="ask-user-questions-mc"
+                questions={@pending_questions}
+              />
+            </div>
+
             <.live_component
               module={LoomkinWeb.ComposerComponent}
               id="composer"

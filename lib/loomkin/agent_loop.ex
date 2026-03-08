@@ -213,6 +213,8 @@ defmodule Loomkin.AgentLoop do
         handle_classified(classified, response, messages, config, iteration)
 
       {:error, reason} ->
+        require Logger
+        Logger.error("[Kin:llm] call failed model=#{config.model} reason=#{inspect(reason)}")
         {:error, reason, messages}
     end
   end

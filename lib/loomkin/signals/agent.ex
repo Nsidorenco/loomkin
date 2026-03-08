@@ -108,4 +108,35 @@ defmodule Loomkin.Signals.Agent do
         team_id: [type: :string, required: true]
       ]
   end
+
+  defmodule Crashed do
+    use Jido.Signal,
+      type: "agent.crashed",
+      schema: [
+        agent_name: [type: :string, required: true],
+        team_id: [type: :string, required: true],
+        reason: [type: :string, required: false],
+        crash_count: [type: :integer, required: false]
+      ]
+  end
+
+  defmodule Recovered do
+    use Jido.Signal,
+      type: "agent.recovered",
+      schema: [
+        agent_name: [type: :string, required: true],
+        team_id: [type: :string, required: true],
+        crash_count: [type: :integer, required: false]
+      ]
+  end
+
+  defmodule PermanentlyFailed do
+    use Jido.Signal,
+      type: "agent.permanently_failed",
+      schema: [
+        agent_name: [type: :string, required: true],
+        team_id: [type: :string, required: true],
+        crash_count: [type: :integer, required: false]
+      ]
+  end
 end

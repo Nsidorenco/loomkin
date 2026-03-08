@@ -88,7 +88,12 @@ Plans:
   3. When an agent process crashes and OTP restarts it, the agent card changes from an error state to a recovered/running state within two seconds with no user action
   4. The agent card displays an explicit error state (distinct from paused and idle) during the window between crash and restart
   5. A crashed agent that never restarts (e.g., max restart limit hit) remains in error state with an escalation indicator, not silently disappearing
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+- [ ] 04-01-PLAN.md — Crash signal types, AgentWatcher GenServer, TeamBroadcaster critical classification
+- [ ] 04-02-PLAN.md — TaskGraphComponent SVG DAG, sidebar sub-tab routing, list_with_deps query
+- [ ] 04-03-PLAN.md — Wire crash/task signals into workspace_live, agent card crash states, comms feed events, visual verification
 
 ### Phase 5: Chat Injection & State Machines
 **Goal**: A human can broadcast a message to the entire team conversation (not just reply-to-agent), and agent pause state is strictly separated from permission-pending state via typed state machines
@@ -169,7 +174,7 @@ Plans:
 | 1. Monolith Extraction | 6/6 | Complete |  |
 | 2. Signal Infrastructure | 3/4 | Gap closure | - |
 | 3. Live Comms Feed | 2/2 | Complete   | 2026-03-08 |
-| 4. Task Graph & Crash Recovery | 0/TBD | Not started | - |
+| 4. Task Graph & Crash Recovery | 0/3 | Not started | - |
 | 5. Chat Injection & State Machines | 0/TBD | Not started | - |
 | 6. Approval Gates | 0/TBD | Not started | - |
 | 7. Confidence Triggers | 0/TBD | Not started | - |

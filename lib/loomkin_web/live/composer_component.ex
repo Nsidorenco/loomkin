@@ -23,6 +23,8 @@ defmodule LoomkinWeb.ComposerComponent do
       |> assign_new(:show_agent_picker, fn -> false end)
       |> assign_new(:schedule_popover, fn -> false end)
       |> assign_new(:schedule_delay_minutes, fn -> 5 end)
+      |> assign_new(:broadcast_mode, fn -> false end)
+      |> assign_new(:agent_count, fn -> 0 end)
 
     {:ok, socket}
   end
@@ -93,6 +95,15 @@ defmodule LoomkinWeb.ComposerComponent do
         budget_bar_color_class={@budget_bar_color_class}
       />
       <form phx-submit="send_message" phx-target={@myself} class="px-3 py-2.5 sm:px-4 sm:py-3">
+        <%!-- Broadcast indicator --%>
+        <div
+          :if={@broadcast_mode && !@reply_target}
+          class="flex items-center gap-1.5 mb-2 px-2.5 py-1.5 rounded-lg text-xs text-amber-300/80 bg-amber-900/20 border border-amber-500/20"
+        >
+          <span class="text-sm">&#x1F4E2;</span>
+          <span class="font-medium">Broadcasting to team</span>
+          <span class="text-amber-400/60 ml-1">({@agent_count} agents)</span>
+        </div>
         <%!-- Reply indicator --%>
         <div
           :if={@reply_target}
@@ -159,6 +170,12 @@ defmodule LoomkinWeb.ComposerComponent do
               >
                 <span class="w-1.5 h-1.5 rounded-full flex-shrink-0 bg-emerald-400" />
                 <span class="font-medium">Entire Kin</span>
+                <span
+                  :if={@agent_count > 0}
+                  class="ml-auto text-[10px] text-muted bg-surface-2 px-1.5 py-0.5 rounded-full"
+                >
+                  {@agent_count}
+                </span>
               </button>
               <button
                 :for={agent <- @picker_agents}

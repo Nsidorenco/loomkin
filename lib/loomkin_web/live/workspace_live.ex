@@ -73,6 +73,7 @@ defmodule LoomkinWeb.WorkspaceLive do
         budget_pct: 0,
         budget_bar_color_class: "bg-emerald-500",
         last_user_message: nil,
+        failed_message_idx: nil,
         # Message queue UI state
         queue_drawer: nil,
         agent_queues: %{},
@@ -1030,6 +1031,82 @@ defmodule LoomkinWeb.WorkspaceLive do
     {:noreply, socket}
   end
 
+  # Agent crash/recovery signals — update card status and insert comms events
+  def handle_info(%Jido.Signal{type: "agent.crashed"} = sig, socket) do
+    agent_name = sig.data[:agent_name] || "unknown"
+    crash_count = sig.data[:crash_count] || 1
+    reason = sig.data[:reason] || "unknown"
+
+    event = %{
+      id: Ecto.UUID.generate(),
+      type: :agent_crashed,
+      agent: agent_name,
+      content: "#{agent_name} crashed (reason: #{inspect(reason)})",
+      timestamp: DateTime.utc_now(),
+      expanded: false,
+      metadata: %{team_id: sig.data[:team_id]}
+    }
+
+    socket =
+      socket
+      |> update_card_status(agent_name, :crashed)
+      |> update_agent_card(agent_name, %{crash_count: crash_count})
+      |> stream_insert(:comms_events, event)
+      |> update(:comms_event_count, &(&1 + 1))
+
+    {:noreply, socket}
+  end
+
+  def handle_info(%Jido.Signal{type: "agent.recovered"} = sig, socket) do
+    agent_name = sig.data[:agent_name] || "unknown"
+    crash_count = sig.data[:crash_count] || 0
+
+    event = %{
+      id: Ecto.UUID.generate(),
+      type: :agent_recovered,
+      agent: agent_name,
+      content: "#{agent_name} recovered (crash count: #{crash_count})",
+      timestamp: DateTime.utc_now(),
+      expanded: false,
+      metadata: %{team_id: sig.data[:team_id]}
+    }
+
+    Process.send_after(self(), {:clear_recovering, agent_name}, 2_000)
+
+    socket =
+      socket
+      |> update_card_status(agent_name, :recovering)
+      |> update_agent_card(agent_name, %{crash_count: crash_count})
+      |> stream_insert(:comms_events, event)
+      |> update(:comms_event_count, &(&1 + 1))
+
+    {:noreply, socket}
+  end
+
+  def handle_info(%Jido.Signal{type: "agent.permanently_failed"} = sig, socket) do
+    agent_name = sig.data[:agent_name] || "unknown"
+    crash_count = sig.data[:crash_count] || 0
+
+    event = %{
+      id: Ecto.UUID.generate(),
+      type: :agent_permanently_failed,
+      agent: agent_name,
+      content: "#{agent_name} permanently failed after #{crash_count} crashes",
+      timestamp: DateTime.utc_now(),
+      expanded: false,
+      metadata: %{team_id: sig.data[:team_id]}
+    }
+
+    socket =
+      socket
+      |> update_card_status(agent_name, :permanently_failed)
+      |> update_agent_card(agent_name, %{crash_count: crash_count})
+      |> stream_insert(:comms_events, event)
+      |> update(:comms_event_count, &(&1 + 1))
+
+    {:noreply, socket}
+  end
+
   # Catch-all for unhandled signal types — ignore
   def handle_info(%Jido.Signal{type: _type}, socket) do
     {:noreply, socket}
@@ -1477,7 +1554,8 @@ defmodule LoomkinWeb.WorkspaceLive do
      socket
      |> schedule_roster_refresh()
      |> forward_to_activity(event)
-     |> forward_to_cards_and_comms(event)}
+     |> forward_to_cards_and_comms(event)
+     |> refresh_task_graph()}
   end
 
   def handle_info({:task_assigned, task_id, agent_name} = event, socket) do
@@ -1495,6 +1573,7 @@ defmodule LoomkinWeb.WorkspaceLive do
       |> forward_to_activity(event)
       |> forward_to_cards_and_comms(event)
       |> update_card_task(agent_name, task_title)
+      |> refresh_task_graph()
 
     {:noreply, socket}
   end
@@ -1508,6 +1587,7 @@ defmodule LoomkinWeb.WorkspaceLive do
       |> forward_to_activity(event)
       |> forward_to_cards_and_comms(event)
       |> update_card_task(agent_name, nil)
+      |> refresh_task_graph()
 
     {:noreply, socket}
   end
@@ -1520,6 +1600,7 @@ defmodule LoomkinWeb.WorkspaceLive do
       |> forward_to_activity(event)
       |> forward_to_cards_and_comms(event)
       |> update_card_status(owner, :working)
+      |> refresh_task_graph()
 
     {:noreply, socket}
   end
@@ -1532,6 +1613,7 @@ defmodule LoomkinWeb.WorkspaceLive do
       |> forward_to_activity(event)
       |> forward_to_cards_and_comms(event)
       |> update_card_status(owner, :error)
+      |> refresh_task_graph()
 
     {:noreply, socket}
   end
@@ -1733,21 +1815,43 @@ defmodule LoomkinWeb.WorkspaceLive do
         socket =
           case result do
             {:ok, _response} ->
-              socket
+              assign(socket, failed_message_idx: nil)
 
             {:error, :cancelled} ->
               # User-initiated cancel — no error flash needed
-              assign(socket, streaming: false, streaming_content: "")
+              assign(socket, streaming: false, streaming_content: "", failed_message_idx: nil)
 
             {:error, :busy} ->
               # Agent is busy with another task — show a gentle warning
               socket
-              |> assign(streaming: false, streaming_content: "")
+              |> assign(streaming: false, streaming_content: "", failed_message_idx: nil)
               |> put_flash(:info, "Agent is busy — try again in a moment")
 
             {:error, reason} ->
+              failed_idx =
+                socket.assigns.messages
+                |> Enum.with_index()
+                |> Enum.filter(fn {msg, _} -> msg.role == :user end)
+                |> List.last()
+                |> case do
+                  {_, idx} -> idx
+                  nil -> nil
+                end
+
+              messages =
+                if failed_idx != nil do
+                  List.update_at(socket.assigns.messages, failed_idx, &Map.put(&1, :failed, true))
+                else
+                  socket.assigns.messages
+                end
+
               socket
-              |> assign(streaming: false, streaming_content: "")
+              |> assign(
+                streaming: false,
+                streaming_content: "",
+                failed_message_idx: failed_idx,
+                messages: messages
+              )
               |> put_flash(:error, format_llm_error(reason))
 
             _other ->
@@ -1760,6 +1864,31 @@ defmodule LoomkinWeb.WorkspaceLive do
         # Not our task — ignore
         {:noreply, socket}
     end
+  end
+
+  def handle_info({:resend_message, content}, socket) do
+    session_id = socket.assigns.session_id
+    failed_idx = socket.assigns.failed_message_idx
+
+    messages =
+      if failed_idx != nil do
+        List.update_at(socket.assigns.messages, failed_idx, &Map.delete(&1, :failed))
+      else
+        socket.assigns.messages
+      end
+
+    task =
+      Task.Supervisor.async_nolink(Loomkin.Teams.TaskSupervisor, fn ->
+        Session.send_message(session_id, content)
+      end)
+
+    {:noreply,
+     assign(socket,
+       async_task: task,
+       status: :thinking,
+       messages: messages,
+       failed_message_idx: nil
+     )}
   end
 
   def handle_info({:DOWN, ref, :process, _pid, _reason}, socket) when is_reference(ref) do
@@ -2238,6 +2367,17 @@ defmodule LoomkinWeb.WorkspaceLive do
     {:noreply, socket}
   end
 
+  # Clear recovering status back to idle after 2s delay
+  def handle_info({:clear_recovering, agent_name}, socket) do
+    card = get_in(socket.assigns, [:agent_cards, agent_name])
+
+    if card && card.status == :recovering do
+      {:noreply, update_card_status(socket, agent_name, :idle)}
+    else
+      {:noreply, socket}
+    end
+  end
+
   # Remove terminated agent card after animation completes
   def handle_info({:remove_terminated_card, agent_name}, socket) do
     cards = Map.delete(socket.assigns.agent_cards, agent_name)
@@ -2457,6 +2597,7 @@ defmodule LoomkinWeb.WorkspaceLive do
                 architect_phase={@architect_phase}
                 plan_steps={@plan_steps}
                 current_step={@current_step}
+                failed_message_idx={@failed_message_idx}
               />
             </div>
 
@@ -2863,6 +3004,21 @@ defmodule LoomkinWeb.WorkspaceLive do
         refresh_ref: ref
       )
     end
+  end
+
+  defp refresh_task_graph(socket) do
+    if socket.assigns[:active_tab] == :graph do
+      ref = System.unique_integer()
+
+      send_update(LoomkinWeb.TaskGraphComponent,
+        id: "task-graph",
+        session_id: socket.assigns[:session_id],
+        team_id: socket.assigns[:active_team_id],
+        refresh_ref: ref
+      )
+    end
+
+    socket
   end
 
   defp schedule_roster_refresh(socket) do

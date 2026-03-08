@@ -740,6 +740,41 @@ defmodule Loomkin.Teams.Agent do
   end
 
   @impl true
+  def handle_cast({:append_ask_user_question, tool_args, card_id, question_id}, state) do
+    question_text = Map.get(tool_args, "question") || Map.get(tool_args, :question)
+    options = Map.get(tool_args, "options") || Map.get(tool_args, :options) || []
+
+    question_entry = %{question_id: question_id, question: question_text, options: options}
+
+    new_pending =
+      case state.pending_ask_user do
+        %{card_id: ^card_id} = card ->
+          %{card | questions: card.questions ++ [question_entry]}
+
+        _ ->
+          # Card was closed between check and append — create a fresh entry
+          %{card_id: card_id, questions: [question_entry]}
+      end
+
+    # Register this question_id in Registry so the answer can be routed back to the
+    # tool task process that is blocking on receive {:ask_user_answer, question_id, _}
+    Registry.register(Loomkin.Teams.AgentRegistry, {:ask_user, question_id}, self())
+
+    # Publish a question signal so WorkspaceLive can render it in the ask-user card
+    signal =
+      Loomkin.Signals.Team.AskUserQuestion.new!(%{
+        question_id: question_id,
+        agent_name: state.name,
+        team_id: state.team_id,
+        question: question_text || ""
+      })
+
+    Loomkin.Signals.publish(%{signal | data: Map.put(signal.data, :options, options)})
+
+    {:noreply, %{state | pending_ask_user: new_pending}}
+  end
+
+  @impl true
   def handle_cast({:assign_task, task}, state) do
     # Only override model if the task has an explicit model_hint;
     # otherwise preserve the agent's current model (set at spawn from user's selection)
@@ -2030,17 +2065,68 @@ defmodule Loomkin.Teams.Agent do
 
         # AskUser blocks waiting for human input (up to 5 min), so bypass the
         # default 60s Jido.Exec timeout and call run/2 directly.
+        # Rate-limit check happens first via GenServer.call to read live state.
         if tool_module == Loomkin.Tools.AskUser do
-          atomized = Loomkin.Tools.Registry.atomize_keys(tool_args)
+          agent_pid = self()
 
-          result =
-            try do
-              tool_module.run(atomized, context)
-            rescue
-              e -> {:error, Exception.message(e)}
-            end
+          case GenServer.call(agent_pid, {:check_ask_user_rate_limit, tool_args}) do
+            :allow ->
+              atomized = Loomkin.Tools.Registry.atomize_keys(tool_args)
 
-          AgentLoop.format_tool_result(result)
+              result =
+                try do
+                  tool_module.run(atomized, context)
+                rescue
+                  e -> {:error, Exception.message(e)}
+                end
+
+              # After run/2 returns (question was answered), notify GenServer
+              # to update last_asked_at and clear the pending card
+              question_id =
+                Map.get(tool_args, "question_id") || Map.get(tool_args, :question_id)
+
+              if question_id do
+                GenServer.call(agent_pid, {:ask_user_answered, question_id})
+              end
+
+              AgentLoop.format_tool_result(result)
+
+            {:batch, card_id} ->
+              # Append question to open card and block tool task waiting for answer
+              question_id = Ecto.UUID.generate()
+
+              GenServer.cast(
+                agent_pid,
+                {:append_ask_user_question, tool_args, card_id, question_id}
+              )
+
+              receive do
+                {:ask_user_answer, ^question_id, answer} ->
+                  GenServer.call(agent_pid, {:ask_user_answered, question_id})
+
+                  AgentLoop.format_tool_result(
+                    {:ok, %{result: "User answered: #{answer}", answer: answer}}
+                  )
+              after
+                300_000 ->
+                  # Timeout: clear the question and proceed autonomously
+                  GenServer.call(agent_pid, {:ask_user_answered, question_id})
+
+                  AgentLoop.format_tool_result(
+                    {:ok, %{result: "Collective: timeout — proceeding autonomously", answer: nil}}
+                  )
+              end
+
+            :drop ->
+              AgentLoop.format_tool_result(
+                {:ok,
+                 %{
+                   result:
+                     "Rate limit reached — proceeding autonomously. Your question was not shown to the human.",
+                   answer: nil
+                 }}
+              )
+          end
         else
           AgentLoop.default_run_tool(tool_module, tool_args, context)
         end

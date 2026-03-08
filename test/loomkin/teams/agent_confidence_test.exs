@@ -132,6 +132,43 @@ defmodule Loomkin.Teams.AgentConfidenceTest do
     end
   end
 
+  describe "on_tool_execute: drop canned result" do
+    test "drop: returns canned message string without touching pending_ask_user" do
+      %{pid: pid} = start_agent()
+      one_minute_ago = System.monotonic_time(:millisecond) - 60_000
+
+      :sys.replace_state(pid, fn s ->
+        %{s | pending_ask_user: nil, last_asked_at: one_minute_ago}
+      end)
+
+      # Simulate the drop path — check returns :drop, so no new card should appear
+      result = GenServer.call(pid, {:check_ask_user_rate_limit, %{"question" => "Q?"}})
+      assert result == :drop
+      state = :sys.get_state(pid)
+      assert state.pending_ask_user == nil
+    end
+  end
+
+  describe "append_ask_user_question cast" do
+    test "appends question to open card in state" do
+      %{pid: pid} = start_agent()
+      card_id = Ecto.UUID.generate()
+      question_id = Ecto.UUID.generate()
+      tool_args = %{"question" => "Batched Q?", "options" => ["X", "Y"]}
+
+      :sys.replace_state(pid, fn s ->
+        %{s | pending_ask_user: %{card_id: card_id, questions: []}}
+      end)
+
+      GenServer.cast(pid, {:append_ask_user_question, tool_args, card_id, question_id})
+      :timer.sleep(50)
+
+      state = :sys.get_state(pid)
+      assert length(state.pending_ask_user.questions) == 1
+      assert hd(state.pending_ask_user.questions).question_id == question_id
+    end
+  end
+
   describe "cooldown semantics" do
     test "cooldown: starts from when last question in batch is answered, not from card open" do
       %{pid: pid} = start_agent()

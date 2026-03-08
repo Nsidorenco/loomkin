@@ -13,8 +13,8 @@
 
 ### Live Visibility
 
-- [ ] **VISB-01**: Agent-to-agent messages visible in real-time comms feed for dynamically spawned sub-teams (bus subscription wired for dynamic team join)
-- [ ] **VISB-02**: Newly spawned agents auto-insert into comms feed and agent card grid without page reload
+- [x] **VISB-01**: Agent-to-agent messages visible in real-time comms feed for dynamically spawned sub-teams (bus subscription wired for dynamic team join)
+- [x] **VISB-02**: Newly spawned agents auto-insert into comms feed and agent card grid without page reload
 - [ ] **VISB-03**: Task dependency graph displays blocked-by relationships visually (not just flat list)
 - [ ] **VISB-04**: OTP crash recovery reflected in UI — crashed agent restarts show recovered status with no manual refresh
 

@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: in-progress
-stopped_at: Completed 03-01-PLAN.md
-last_updated: "2026-03-07T23:51:00.000Z"
-last_activity: 2026-03-07 — Completed 03-01 peer message signal pipeline
+stopped_at: Completed 03-02-PLAN.md
+last_updated: "2026-03-08T01:06:59.029Z"
+last_activity: 2026-03-07 — Completed 03-02 visibility enhancements (team badges, auto-scroll, card animations)
 progress:
   total_phases: 10
-  completed_phases: 2
-  total_plans: 10
-  completed_plans: 11
+  completed_phases: 3
+  total_plans: 12
+  completed_plans: 12
   percent: 23
 ---
 
@@ -25,10 +25,10 @@ See: .planning/PROJECT.md (updated 2026-03-07)
 
 ## Current Position
 
-Phase: 3 of 10 (Live Comms Feed)
-Plan: 1 of ? in current phase
-Status: Completed 03-01 peer message signal pipeline
-Last activity: 2026-03-07 — Completed 03-01 peer message signal pipeline
+Phase: 3 of 10 (Live Comms Feed) - COMPLETE
+Plan: 2 of 2 in current phase
+Status: Completed 03-02 visibility enhancements
+Last activity: 2026-03-07 — Completed 03-02 visibility enhancements (team badges, auto-scroll, card animations)
 
 Progress: [##░░░░░░░░] 23%
 
@@ -59,6 +59,7 @@ Progress: [##░░░░░░░░] 23%
 | Phase 01-monolith-extraction P05 | 11 | 2 tasks | 3 files |
 | Phase 01-monolith-extraction P03 | 5 | 2 tasks | 2 files |
 | Phase 01-monolith-extraction P02 | 135 | 2 tasks | 2 files |
+| Phase 03-live-comms-feed P02 | 8 | 3 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -87,6 +88,8 @@ Recent decisions affecting current work:
 - [Phase 03-01]: peer messages classified as critical signals for sub-1-second delivery via TeamBroadcaster
 - [Phase 03-01]: stream limit: -500 caps comms events DOM to 500 most recent items
 - [Phase 03-01]: blue accent for peer_message type distinct from cyan channel_message
+- [Phase 03-live-comms-feed]: CommsFeedScroll uses MutationObserver + scrollTop threshold for reliable LiveView stream patch detection
+- [Phase 03-live-comms-feed]: Terminated cards use Process.send_after 3s delay before removal to allow fade animation
 
 ### Pending Todos
 
@@ -101,6 +104,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-07T23:51:00.000Z
-Stopped at: Completed 03-01-PLAN.md
-Resume file: .planning/phases/03-live-comms-feed/03-01-SUMMARY.md
+Last session: 2026-03-08T01:06:59.027Z
+Stopped at: Completed 03-02-PLAN.md
+Resume file: None

@@ -742,6 +742,12 @@ defmodule Loomkin.Teams.Agent do
       {%Task{ref: ^ref}, from} ->
         task_id = state.task && state.task[:id]
 
+        require Logger
+
+        Logger.error(
+          "[Kin:agent] loop error name=#{state.name} team=#{state.team_id} reason=#{inspect(reason)}"
+        )
+
         state = %{state | messages: msgs, loop_task: nil}
         state = set_status_and_broadcast(state, :idle)
 
@@ -814,8 +820,22 @@ defmodule Loomkin.Teams.Agent do
       {%Task{ref: ^ref}, from} ->
         task_id = state.task && state.task[:id]
 
+        require Logger
+
+        Logger.error(
+          "[Kin:agent] loop crashed name=#{state.name} team=#{state.team_id} reason=#{inspect(reason)}"
+        )
+
         state = %{state | loop_task: nil}
-        state = set_status_and_broadcast(state, :idle)
+
+        status =
+          if reason in [:normal, :shutdown] do
+            :idle
+          else
+            :error
+          end
+
+        state = set_status_and_broadcast(state, status)
 
         if from do
           GenServer.reply(from, {:error, :crashed})

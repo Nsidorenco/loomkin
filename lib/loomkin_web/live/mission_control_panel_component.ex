@@ -10,15 +10,17 @@ defmodule LoomkinWeb.MissionControlPanelComponent do
   `send(self(), {:mission_control_event, event, params})`.
 
   Parent-provided assigns:
-    - agent_cards          map of agent_name => card struct
-    - concierge_card_names list of agent names with concierge role
-    - worker_card_names    list of agent names with worker roles
-    - comms_event_count    integer
-    - focused_agent        binary | nil
-    - kin_agents           list of kin structs
-    - cached_agents        list of cached agent structs
-    - active_team_id       binary | nil
-    - comms_stream         the @streams.comms_events value (may be nil in tests)
+    - agent_cards               map of agent_name => card struct
+    - concierge_card_names      list of agent names with concierge role
+    - worker_card_names         list of agent names with worker roles
+    - comms_event_count         integer
+    - focused_agent             binary | nil
+    - kin_agents                list of kin structs
+    - cached_agents             list of cached agent structs
+    - active_team_id            binary | nil
+    - comms_stream              the @streams.comms_events value (may be nil in tests)
+    - leader_approval_pending   map | nil — set when lead agent awaits sign-off
+                                shape: %{gate_id, question, started_at, timeout_ms}
   """
 
   use LoomkinWeb, :live_component
@@ -76,6 +78,32 @@ defmodule LoomkinWeb.MissionControlPanelComponent do
           </div>
         </div>
       <% else %>
+        <%!-- Leader approval banner — shown when lead agent awaits sign-off --%>
+        <div
+          :if={@leader_approval_pending}
+          data-testid="leader-approval-banner"
+          class="flex-shrink-0 mx-3 mt-3 px-4 py-3 rounded-lg border border-violet-500 bg-violet-950/60 flex items-start gap-3"
+        >
+          <div class="w-2 h-2 rounded-full bg-violet-400 animate-pulse mt-1 flex-shrink-0"></div>
+          <div class="flex-1 min-w-0">
+            <p class="text-xs font-semibold text-violet-300 uppercase tracking-wider mb-1">
+              Team leader awaiting your approval
+            </p>
+            <p class="text-sm text-gray-200 truncate">
+              {@leader_approval_pending.question}
+            </p>
+          </div>
+          <div
+            class="text-xs tabular-nums text-violet-400 flex-shrink-0 mt-0.5"
+            phx-hook="CountdownTimer"
+            id={"leader-banner-timer-#{@leader_approval_pending.gate_id}"}
+            data-deadline-at={
+              @leader_approval_pending.started_at + @leader_approval_pending.timeout_ms
+            }
+          >
+            ...
+          </div>
+        </div>
         <%!-- Concierge — dedicated top card --%>
         <div :if={@concierge_card_names != []} class="flex-shrink-0 p-3 pb-0">
           <.live_component

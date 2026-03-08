@@ -84,7 +84,9 @@ defmodule LoomkinWeb.WorkspaceLive do
         # File explorer drawer
         file_drawer_open: false,
         # Broadcast mode: true in team sessions, false in solo
-        broadcast_mode: params["team_id"] != nil
+        broadcast_mode: params["team_id"] != nil,
+        # Leader approval gate pending (set when lead agent hits approval gate, nil otherwise)
+        leader_approval_pending: nil
       )
       |> stream(:comms_events, [], limit: -500)
 
@@ -2864,6 +2866,7 @@ defmodule LoomkinWeb.WorkspaceLive do
             kin_agents={@kin_agents}
             cached_agents={@cached_agents}
             active_team_id={@active_team_id}
+            leader_approval_pending={@leader_approval_pending}
           />
 
           <%!-- Chat + Composer column --%>

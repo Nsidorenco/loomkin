@@ -46,7 +46,9 @@ defmodule Loomkin.Teams.Agent do
     pause_requested: false,
     pause_queued: false,
     paused_state: nil,
-    subscription_ids: []
+    subscription_ids: [],
+    last_asked_at: nil,
+    pending_ask_user: nil
   ]
 
   # --- Public API ---
@@ -661,6 +663,52 @@ defmodule Loomkin.Teams.Agent do
     {:reply, :ok, %{state | loop_task: {task, nil}}}
   end
 
+  # --- AskUser rate-limit handle_call ---
+
+  @impl true
+  def handle_call({:check_ask_user_rate_limit, _tool_args}, _from, state) do
+    cond do
+      state.pending_ask_user != nil ->
+        {:reply, {:batch, state.pending_ask_user.card_id}, state}
+
+      state.last_asked_at != nil and
+          System.monotonic_time(:millisecond) - state.last_asked_at < 300_000 ->
+        {:reply, :drop, state}
+
+      true ->
+        card_id = Ecto.UUID.generate()
+        new_pending = %{card_id: card_id, questions: []}
+        state = %{state | pending_ask_user: new_pending}
+        state = set_status_and_broadcast(state, :ask_user_pending)
+        {:reply, :allow, state}
+    end
+  end
+
+  @impl true
+  def handle_call({:ask_user_answered, question_id}, _from, state) do
+    new_pending =
+      case state.pending_ask_user do
+        nil ->
+          nil
+
+        %{questions: questions} = card ->
+          remaining = Enum.reject(questions, &(&1.question_id == question_id))
+          %{card | questions: remaining}
+      end
+
+    state =
+      if new_pending == nil or new_pending.questions == [] do
+        state =
+          %{state | pending_ask_user: nil, last_asked_at: System.monotonic_time(:millisecond)}
+
+        set_status_and_broadcast(state, :idle)
+      else
+        %{state | pending_ask_user: new_pending}
+      end
+
+    {:reply, :ok, state}
+  end
+
   # --- handle_cast ---
 
   @impl true
@@ -677,6 +725,12 @@ defmodule Loomkin.Teams.Agent do
 
   def handle_cast(:request_pause, %{status: :approval_pending} = state) do
     # Pre-wire for Phase 6: queue pause during approval gate
+    broadcast_team(state, {:agent_pause_queued, state.name})
+    {:noreply, %{state | pause_queued: true}}
+  end
+
+  def handle_cast(:request_pause, %{status: :ask_user_pending} = state) do
+    # Queue pause during ask_user gate — same pattern as approval_pending
     broadcast_team(state, {:agent_pause_queued, state.name})
     {:noreply, %{state | pause_queued: true}}
   end

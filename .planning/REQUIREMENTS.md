@@ -76,7 +76,7 @@
 | VISB-01 | Phase 3 — Live Comms Feed | In Progress (03-01 complete) |
 | VISB-02 | Phase 3 — Live Comms Feed | In Progress (03-01 complete) |
 | VISB-03 | Phase 4 — Task Graph & Crash Recovery | Pending |
-| VISB-04 | Phase 4 — Task Graph & Crash Recovery | Pending |
+| VISB-04 | Phase 4 — Task Graph & Crash Recovery | In Progress (04-01 signals complete) |
 | INTV-01 | Phase 5 — Chat Injection & State Machines | Pending |
 | INTV-04 | Phase 5 — Chat Injection & State Machines | Pending |
 | INTV-02 | Phase 6 — Approval Gates | Pending |

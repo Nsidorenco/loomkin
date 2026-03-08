@@ -91,7 +91,7 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
-- [ ] 04-01-PLAN.md — Crash signal types, AgentWatcher GenServer, TeamBroadcaster critical classification
+- [x] 04-01-PLAN.md — Crash signal types, AgentWatcher GenServer, TeamBroadcaster critical classification
 - [ ] 04-02-PLAN.md — TaskGraphComponent SVG DAG, sidebar sub-tab routing, list_with_deps query
 - [ ] 04-03-PLAN.md — Wire crash/task signals into workspace_live, agent card crash states, comms feed events, visual verification
 
@@ -174,7 +174,7 @@ Plans:
 | 1. Monolith Extraction | 6/6 | Complete |  |
 | 2. Signal Infrastructure | 3/4 | Gap closure | - |
 | 3. Live Comms Feed | 2/2 | Complete   | 2026-03-08 |
-| 4. Task Graph & Crash Recovery | 0/3 | Not started | - |
+| 4. Task Graph & Crash Recovery | 1/3 | In progress | - |
 | 5. Chat Injection & State Machines | 0/TBD | Not started | - |
 | 6. Approval Gates | 0/TBD | Not started | - |
 | 7. Confidence Triggers | 0/TBD | Not started | - |

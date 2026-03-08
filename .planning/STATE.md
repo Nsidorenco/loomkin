@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: in-progress
-stopped_at: Completed 03-02-PLAN.md
-last_updated: "2026-03-08T01:06:59.029Z"
-last_activity: 2026-03-07 — Completed 03-02 visibility enhancements (team badges, auto-scroll, card animations)
+status: completed
+stopped_at: Completed 04-02-PLAN.md
+last_updated: "2026-03-08T02:09:32.944Z"
+last_activity: 2026-03-08 — Completed 04-02 task dependency graph (TaskGraphComponent SVG DAG, sub-tab routing)
 progress:
   total_phases: 10
   completed_phases: 3
-  total_plans: 12
-  completed_plans: 12
-  percent: 23
+  total_plans: 15
+  completed_plans: 14
+  percent: 29
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-07)
 
 **Core value:** Humans can see exactly what agents are doing and saying to each other in real-time, and intervene naturally at any moment — without breaking the autonomous flow.
-**Current focus:** Phase 3 — Live Comms Feed
+**Current focus:** Phase 4 — Task Graph & Crash Recovery
 
 ## Current Position
 
-Phase: 3 of 10 (Live Comms Feed) - COMPLETE
-Plan: 2 of 2 in current phase
-Status: Completed 03-02 visibility enhancements
-Last activity: 2026-03-07 — Completed 03-02 visibility enhancements (team badges, auto-scroll, card animations)
+Phase: 4 of 10 (Task Graph & Crash Recovery) - IN PROGRESS
+Plan: 2 of 3 in current phase (COMPLETE)
+Status: Completed 04-02 task dependency graph
+Last activity: 2026-03-08 — Completed 04-02 task dependency graph (TaskGraphComponent SVG DAG, sub-tab routing)
 
-Progress: [##░░░░░░░░] 23%
+Progress: [##░░░░░░░░] 29%
 
 ## Performance Metrics
 
@@ -60,6 +60,8 @@ Progress: [##░░░░░░░░] 23%
 | Phase 01-monolith-extraction P03 | 5 | 2 tasks | 2 files |
 | Phase 01-monolith-extraction P02 | 135 | 2 tasks | 2 files |
 | Phase 03-live-comms-feed P02 | 8 | 3 tasks | 6 files |
+| Phase 04-task-graph-crash-recovery P01 | 5 | 2 tasks | 5 files |
+| Phase 04 P02 | 5 | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -90,6 +92,10 @@ Recent decisions affecting current work:
 - [Phase 03-01]: blue accent for peer_message type distinct from cyan channel_message
 - [Phase 03-live-comms-feed]: CommsFeedScroll uses MutationObserver + scrollTop threshold for reliable LiveView stream patch detection
 - [Phase 03-live-comms-feed]: Terminated cards use Process.send_after 3s delay before removal to allow fade animation
+- [Phase 04-01]: AgentWatcher uses Process.send_after polling (500ms x 5 attempts) for recovery detection rather than registry event hooks
+- [Phase 04-01]: Crash count tracked per {team_id, agent_name} key across watcher lifetime for monotonic increment
+- [Phase 04-01]: Agent :DOWN handler sets :error on abnormal exits, :idle on normal/shutdown
+- [Phase 04]: Used tasks_override/deps_override assigns for component testing without DB queries
 
 ### Pending Todos
 
@@ -104,6 +110,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-08T01:06:59.027Z
-Stopped at: Completed 03-02-PLAN.md
+Last session: 2026-03-08T02:09:32.186Z
+Stopped at: Completed 04-02-PLAN.md
 Resume file: None

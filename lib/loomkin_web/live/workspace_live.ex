@@ -2745,66 +2745,67 @@ defmodule LoomkinWeb.WorkspaceLive do
               active_team_id={@active_team_id}
             />
 
-          <%!-- Chat + Composer column --%>
-          <div class="flex-1 flex flex-col min-w-0 min-h-0 border-r border-subtle">
-            <div class="flex-1 overflow-auto min-h-0">
+            <%!-- Chat + Composer column --%>
+            <div class="flex-1 flex flex-col min-w-0 min-h-0 border-r border-subtle">
+              <div class="flex-1 overflow-auto min-h-0">
+                <.live_component
+                  module={LoomkinWeb.ChatComponent}
+                  id="chat"
+                  messages={@messages}
+                  status={@status}
+                  current_tool={@current_tool}
+                  streaming={@streaming}
+                  streaming_content={@streaming_content}
+                  architect_phase={@architect_phase}
+                  plan_steps={@plan_steps}
+                  current_step={@current_step}
+                  failed_message_idx={@failed_message_idx}
+                />
+              </div>
+
+              <%!-- Pending ask_user questions --%>
+              <div
+                :if={@pending_questions != []}
+                class="flex-shrink-0 px-3 py-2 border-t border-brand bg-surface-1"
+              >
+                <.live_component
+                  module={LoomkinWeb.AskUserComponent}
+                  id="ask-user-questions-mc"
+                  questions={@pending_questions}
+                />
+              </div>
+
               <.live_component
-                module={LoomkinWeb.ChatComponent}
-                id="chat"
-                messages={@messages}
+                module={LoomkinWeb.ComposerComponent}
+                id="composer"
+                input_text={@input_text}
+                reply_target={Map.get(assigns, :reply_target)}
+                cached_agents={@cached_agents}
+                cached_budget={@cached_budget}
+                budget_pct={@budget_pct}
+                budget_bar_color_class={@budget_bar_color_class}
+                last_user_message={@last_user_message}
+                queue_drawer={@queue_drawer}
+                scheduled_messages={@scheduled_messages}
+                agent_queues={@agent_queues}
+                active_team_id={@active_team_id}
+                session_id={@session_id}
                 status={@status}
-                current_tool={@current_tool}
-                streaming={@streaming}
-                streaming_content={@streaming_content}
-                architect_phase={@architect_phase}
-                plan_steps={@plan_steps}
-                current_step={@current_step}
-                failed_message_idx={@failed_message_idx}
+                agent_cards={@agent_cards}
+                broadcast_mode={@broadcast_mode}
+                agent_count={length(@cached_agents)}
               />
-            </div>
 
-            <%!-- Pending ask_user questions --%>
-            <div
-              :if={@pending_questions != []}
-              class="flex-shrink-0 px-3 py-2 border-t border-brand bg-surface-1"
-            >
+              <%!-- Queue drawer overlay --%>
               <.live_component
-                module={LoomkinWeb.AskUserComponent}
-                id="ask-user-questions-mc"
-                questions={@pending_questions}
+                :if={@queue_drawer}
+                module={LoomkinWeb.MessageQueueComponent}
+                id={"queue-drawer-#{@queue_drawer.agent}"}
+                queue={Map.get(@agent_queues, @queue_drawer.agent, [])}
+                agent_name={@queue_drawer.agent}
+                team_id={@queue_drawer.team_id}
               />
             </div>
-
-            <.live_component
-              module={LoomkinWeb.ComposerComponent}
-              id="composer"
-              input_text={@input_text}
-              reply_target={Map.get(assigns, :reply_target)}
-              cached_agents={@cached_agents}
-              cached_budget={@cached_budget}
-              budget_pct={@budget_pct}
-              budget_bar_color_class={@budget_bar_color_class}
-              last_user_message={@last_user_message}
-              queue_drawer={@queue_drawer}
-              scheduled_messages={@scheduled_messages}
-              agent_queues={@agent_queues}
-              active_team_id={@active_team_id}
-              session_id={@session_id}
-              status={@status}
-              agent_cards={@agent_cards}
-              broadcast_mode={@broadcast_mode}
-              agent_count={length(@cached_agents)}
-            />
-
-            <%!-- Queue drawer overlay --%>
-            <.live_component
-              :if={@queue_drawer}
-              module={LoomkinWeb.MessageQueueComponent}
-              id={"queue-drawer-#{@queue_drawer.agent}"}
-              queue={Map.get(@agent_queues, @queue_drawer.agent, [])}
-              agent_name={@queue_drawer.agent}
-              team_id={@queue_drawer.team_id}
-            />
           </div>
 
           <%!-- Right: Agent Deep-Focus Panel (w-80, collapsible) --%>

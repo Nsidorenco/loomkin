@@ -2472,7 +2472,8 @@ defmodule Loomkin.Teams.Agent do
     )
     |> Loomkin.Signals.publish()
   rescue
-    _ ->
+    e ->
+      Logger.warning("[Kin:agent] broadcast_team failed: #{inspect(e)}")
       :ok
   end
 
@@ -2493,7 +2494,8 @@ defmodule Loomkin.Teams.Agent do
     )
     |> Loomkin.Signals.publish()
   rescue
-    _ ->
+    e ->
+      Logger.warning("[Kin:agent] broadcast_team failed: #{inspect(e)}")
       :ok
   end
 
@@ -2510,7 +2512,8 @@ defmodule Loomkin.Teams.Agent do
     )
     |> Loomkin.Signals.publish()
   rescue
-    _ ->
+    e ->
+      Logger.warning("[Kin:agent] broadcast_team failed: #{inspect(e)}")
       :ok
   end
 end

@@ -432,7 +432,7 @@ defmodule LoomkinWeb.AgentCardComponent do
         <div class="flex items-center gap-1.5 mt-1">
           <button
             phx-click="approve_card_agent"
-            phx-value-gate-id={@card[:pending_approval][:gate_id]}
+            phx-value-gate_id={@card[:pending_approval][:gate_id]}
             phx-value-agent={@card.name}
             phx-value-context=""
             phx-disable-with="Approving..."
@@ -579,7 +579,7 @@ defmodule LoomkinWeb.AgentCardComponent do
         <div class="flex items-center gap-1.5 mt-1">
           <button
             phx-click="approve_spawn"
-            phx-value-gate-id={@card[:pending_approval][:gate_id]}
+            phx-value-gate_id={@card[:pending_approval][:gate_id]}
             phx-value-agent={@card.name}
             phx-value-context=""
             phx-disable-with="Approving..."

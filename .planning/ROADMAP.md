@@ -21,7 +21,7 @@ and the leader research protocol. Each phase delivers one coherent, testable cap
 - [ ] **Phase 8: Dynamic Tree Visibility** - Nested sub-teams auto-appear in UI via recursive subscription
 - [x] **Phase 9: Spawn Safety** - Pre-spawn budget check and approval gate before expensive sub-tree creation (completed 2026-03-09)
 - [x] **Phase 10: Leader Research Protocol** - Leader spawns research sub-agents, synthesizes findings, then asks humans (completed 2026-03-09)
-- [ ] **Phase 11: Observability Completeness** - Add comms feed events for spawn gate open/close and leader awaiting-synthesis transitions
+- [x] **Phase 11: Observability Completeness** - Add comms feed events for spawn gate open/close and leader awaiting-synthesis transitions (completed 2026-03-09)
 
 ## Phase Details
 
@@ -238,7 +238,7 @@ Plans:
 | 8. Dynamic Tree Visibility | 4/5 | In Progress|  |
 | 9. Spawn Safety | 4/4 | Complete   | 2026-03-09 |
 | 10. Leader Research Protocol | 4/4 | Complete    | 2026-03-09 |
-| 11. Observability Completeness | 0/1 | Pending | - |
+| 11. Observability Completeness | 1/1 | Complete   | 2026-03-09 |
 
 ---
 *Roadmap created: 2026-03-07*

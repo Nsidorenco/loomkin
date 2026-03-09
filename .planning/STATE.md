@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: completed
-stopped_at: Completed 10-leader-research-protocol-03-PLAN.md (human verified)
-last_updated: "2026-03-09T03:34:18.284Z"
+stopped_at: Completed 11-01-PLAN.md
+last_updated: "2026-03-09T04:01:40.641Z"
 last_activity: 2026-03-08 — Distinct agent card controls with force-pause, dual indicator, steer-only resume, and state transition comms events
 progress:
-  total_phases: 10
-  completed_phases: 10
-  total_plans: 43
-  completed_plans: 43
+  total_phases: 11
+  completed_phases: 11
+  total_plans: 44
+  completed_plans: 44
   percent: 100
 ---
 
@@ -91,6 +91,7 @@ Progress: [██████████] 100%
 | Phase 10-leader-research-protocol P01 | 12 | 1 tasks | 2 files |
 | Phase 10-leader-research-protocol P02 | 5 | 2 tasks | 3 files |
 | Phase 10-leader-research-protocol P03 | 5 | 1 tasks | 1 files |
+| Phase 11-observability-completeness P01 | 3 | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -177,6 +178,8 @@ Recent decisions affecting current work:
 - [Phase 10-leader-research-protocol]: collect_research_findings/3 returns partial findings on timeout — leader proceeds with what arrived rather than erroring
 - [Phase 10-leader-research-protocol]: Registry key {:awaiting_synthesis, team_id, agent_name} mirrors {:spawn_gate, gate_id} pattern from Phase 9
 - [Phase 10-leader-research-protocol]: indigo-500 pulsing dot for :awaiting_synthesis is visually distinct from all other status indicators: violet (approval_pending), cyan (ask_user_pending), blue (paused), amber (permission/blocked)
+- [Phase 11-observability-completeness]: used is_map(roles) guard in spawn gate requested handler to handle both map and list role formats safely
+- [Phase 11-observability-completeness]: maybe_insert_synthesis_comms_event/4 as three-clause private helper keeps agent_status handler clean; fires on :awaiting_synthesis entry and :working return with previous_status guard
 
 ### Pending Todos
 
@@ -191,6 +194,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-09T03:23:47.126Z
-Stopped at: Completed 10-leader-research-protocol-03-PLAN.md (human verified)
+Last session: 2026-03-09T04:01:40.639Z
+Stopped at: Completed 11-01-PLAN.md
 Resume file: None

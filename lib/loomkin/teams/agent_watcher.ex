@@ -62,6 +62,17 @@ defmodule Loomkin.Teams.AgentWatcher do
   end
 
   @impl true
+  def handle_info({:DOWN, ref, :process, _pid, reason}, state)
+      when reason in [:normal, :shutdown] do
+    {_agent_info, agents} = Map.pop(state.agents, ref)
+    {:noreply, %{state | agents: agents}}
+  end
+
+  def handle_info({:DOWN, ref, :process, _pid, {:shutdown, _}}, state) do
+    {_agent_info, agents} = Map.pop(state.agents, ref)
+    {:noreply, %{state | agents: agents}}
+  end
+
   def handle_info({:DOWN, ref, :process, _pid, _reason}, state) do
     case Map.pop(state.agents, ref) do
       {nil, _agents} ->

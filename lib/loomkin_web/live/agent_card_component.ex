@@ -344,9 +344,12 @@ defmodule LoomkinWeb.AgentCardComponent do
         </div>
       </div>
 
-      <%!-- Approval panel — visible when status is :approval_pending and pending_approval is set --%>
+      <%!-- Checkpoint approval panel — visible when status is :approval_pending and type is not :spawn_gate --%>
       <div
-        :if={@card.status == :approval_pending && @card[:pending_approval]}
+        :if={
+          @card.status == :approval_pending && @card[:pending_approval] &&
+            @card[:pending_approval][:type] != :spawn_gate
+        }
         class="border-t border-violet-500/30 bg-violet-950/20 px-4 py-3 flex flex-col gap-2"
       >
         <div class="flex items-center justify-between gap-2">
@@ -429,6 +432,145 @@ defmodule LoomkinWeb.AgentCardComponent do
             class="w-full text-xs bg-zinc-900/60 border border-rose-700/30 rounded px-2 py-1.5 text-zinc-200 placeholder-zinc-500 resize-none focus:outline-none focus:border-rose-600/50"
           ></textarea>
           <input type="hidden" name="gate-id" value={@card[:pending_approval][:gate_id]} />
+          <input type="hidden" name="agent" value={@card.name} />
+          <button
+            type="submit"
+            class="self-start px-3 py-1 text-[11px] font-medium rounded bg-rose-900/50 hover:bg-rose-800/60 text-rose-300 border border-rose-700/30 transition-colors cursor-pointer"
+          >
+            Confirm Denial
+          </button>
+        </form>
+      </div>
+
+      <%!-- Spawn gate panel — visible when status is :approval_pending and type is :spawn_gate --%>
+      <div
+        :if={
+          @card.status == :approval_pending && @card[:pending_approval] &&
+            @card[:pending_approval][:type] == :spawn_gate
+        }
+        class="border-t border-violet-500/30 bg-violet-950/20 px-4 py-3 flex flex-col gap-2"
+      >
+        <%!-- Header row: label + countdown --%>
+        <div class="flex items-center justify-between gap-2">
+          <span class="text-[11px] font-semibold text-violet-400">Spawn approval required</span>
+          <span
+            id={"spawn-countdown-#{@card.name}"}
+            phx-hook="CountdownTimer"
+            data-deadline-at={
+              @card[:pending_approval][:started_at] + @card[:pending_approval][:timeout_ms]
+            }
+            class="text-[10px] font-mono text-violet-300/70 tabular-nums"
+          >
+            --:--
+          </span>
+        </div>
+
+        <%!-- Team name --%>
+        <p class="text-sm font-medium text-zinc-200">
+          {@card[:pending_approval][:team_name]}
+        </p>
+
+        <%!-- Role composition --%>
+        <p class="text-xs text-zinc-400">
+          {format_roles(@card[:pending_approval][:roles])}
+        </p>
+
+        <%!-- Estimated cost --%>
+        <p class="text-xs text-violet-300/80">
+          {"estimated ~$#{Float.round(@card[:pending_approval][:estimated_cost] || 0.0, 2)}"}
+        </p>
+
+        <%!-- Limit warning --%>
+        <p
+          :if={@card[:pending_approval][:limit_warning] == :depth}
+          class="text-xs text-amber-400"
+        >
+          Approaching maximum nesting depth
+        </p>
+        <p
+          :if={@card[:pending_approval][:limit_warning] == :agents}
+          class="text-xs text-amber-400"
+        >
+          Approaching maximum agents per team
+        </p>
+
+        <%!-- Auto-approve checkbox --%>
+        <label class="flex items-center gap-2 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={@card[:pending_approval][:auto_approve_spawns]}
+            phx-click="toggle_auto_approve_spawns"
+            phx-value-agent={@card.name}
+            phx-value-enabled={
+              if @card[:pending_approval][:auto_approve_spawns], do: "false", else: "true"
+            }
+            class="rounded border-zinc-600 bg-zinc-800 text-violet-500 focus:ring-violet-500/50"
+          />
+          <span class="text-xs text-zinc-300">Auto-approve future spawns</span>
+        </label>
+
+        <%!-- Three-button row --%>
+        <div class="flex items-center gap-1.5 mt-1">
+          <button
+            phx-click="approve_spawn"
+            phx-value-gate-id={@card[:pending_approval][:gate_id]}
+            phx-value-agent={@card.name}
+            phx-value-context=""
+            class="px-3 py-1.5 text-[11px] font-medium rounded bg-violet-600/80 hover:bg-violet-600 text-white border border-violet-500/50 transition-colors cursor-pointer"
+          >
+            Approve
+          </button>
+          <button
+            phx-click={JS.toggle(to: "#spawn-approve-ctx-#{@card.name}")}
+            type="button"
+            class="px-3 py-1.5 text-[11px] font-medium rounded bg-violet-800/60 hover:bg-violet-700/60 text-violet-200 border border-violet-600/30 transition-colors cursor-pointer"
+          >
+            Approve w/ Context
+          </button>
+          <button
+            phx-click={JS.toggle(to: "#spawn-deny-ctx-#{@card.name}")}
+            type="button"
+            class="px-3 py-1.5 text-[11px] font-medium rounded bg-rose-900/40 hover:bg-rose-800/50 text-rose-300 border border-rose-700/30 transition-colors cursor-pointer"
+          >
+            Deny
+          </button>
+        </div>
+
+        <%!-- Approve w/ Context form (hidden by default) --%>
+        <form
+          id={"spawn-approve-ctx-#{@card.name}"}
+          phx-submit="approve_spawn"
+          class="hidden flex-col gap-1.5 mt-1"
+        >
+          <textarea
+            name="context"
+            rows="2"
+            placeholder="Optional context for the spawn..."
+            class="w-full text-xs bg-zinc-900/60 border border-violet-500/30 rounded px-2 py-1.5 text-zinc-200 placeholder-zinc-500 resize-none focus:outline-none focus:border-violet-400/60"
+          ></textarea>
+          <input type="hidden" name="gate_id" value={@card[:pending_approval][:gate_id]} />
+          <input type="hidden" name="agent" value={@card.name} />
+          <button
+            type="submit"
+            class="self-start px-3 py-1 text-[11px] font-medium rounded bg-violet-600/80 hover:bg-violet-600 text-white border border-violet-500/50 transition-colors cursor-pointer"
+          >
+            Send Approval
+          </button>
+        </form>
+
+        <%!-- Deny form (hidden by default) --%>
+        <form
+          id={"spawn-deny-ctx-#{@card.name}"}
+          phx-submit="deny_spawn"
+          class="hidden flex-col gap-1.5 mt-1"
+        >
+          <textarea
+            name="reason"
+            rows="2"
+            placeholder="Reason for denial (optional)..."
+            class="w-full text-xs bg-zinc-900/60 border border-rose-700/30 rounded px-2 py-1.5 text-zinc-200 placeholder-zinc-500 resize-none focus:outline-none focus:border-rose-600/50"
+          ></textarea>
+          <input type="hidden" name="gate_id" value={@card[:pending_approval][:gate_id]} />
           <input type="hidden" name="agent" value={@card.name} />
           <button
             type="submit"
@@ -651,6 +793,16 @@ defmodule LoomkinWeb.AgentCardComponent do
   end
 
   defp hex_to_rgba(color, _alpha), do: color
+
+  # --- Spawn gate helpers ---
+
+  defp format_roles(roles) when is_list(roles) do
+    roles
+    |> Enum.group_by(fn r -> Map.get(r, "role") || Map.get(r, :role) || "unknown" end)
+    |> Enum.map_join(", ", fn {role, members} -> "#{role} x#{length(members)}" end)
+  end
+
+  defp format_roles(_), do: ""
 
   # --- Test delegates for private helper functions ---
   # These thin wrappers allow unit tests to verify private logic

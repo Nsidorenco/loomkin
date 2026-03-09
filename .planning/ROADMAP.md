@@ -21,6 +21,7 @@ and the leader research protocol. Each phase delivers one coherent, testable cap
 - [ ] **Phase 8: Dynamic Tree Visibility** - Nested sub-teams auto-appear in UI via recursive subscription
 - [x] **Phase 9: Spawn Safety** - Pre-spawn budget check and approval gate before expensive sub-tree creation (completed 2026-03-09)
 - [x] **Phase 10: Leader Research Protocol** - Leader spawns research sub-agents, synthesizes findings, then asks humans (completed 2026-03-09)
+- [ ] **Phase 11: Observability Completeness** - Add comms feed events for spawn gate open/close and leader awaiting-synthesis transitions
 
 ## Phase Details
 
@@ -207,6 +208,22 @@ Plans:
 - [ ] 10-02-PLAN.md — Backend: spawn_type auto-approve path, :awaiting_synthesis status casts and Registry routing (LEAD-01)
 - [ ] 10-03-PLAN.md — UI: AgentCardComponent :awaiting_synthesis indigo dot + human visual verification (LEAD-01)
 
+### Phase 11: Observability Completeness
+**Goal**: The comms feed logs spawn gate open/close events and leader awaiting-synthesis transitions so operators have full observability into both the spawn gate flow and research protocol lifecycle
+**Depends on**: Phase 10
+**Requirements**: TREE-03, LEAD-01
+**Gap Closure**: Closes observability gaps identified in v1.0 milestone audit
+**Success Criteria** (what must be TRUE):
+  1. When a spawn gate opens (agent.spawn.gate.requested), a comms feed entry appears in the session — matching the style of approval gate comms events
+  2. When a spawn gate resolves (agent.spawn.gate.resolved), a corresponding comms feed entry appears showing approved or denied outcome
+  3. When the leader enters :awaiting_synthesis, a comms feed entry appears indicating research has begun
+  4. When the leader exits :awaiting_synthesis, a comms feed entry appears indicating synthesis is complete
+  5. All four new comms event types have entries in AgentCommsComponent @type_config with appropriate icons and colors
+**Plans**: 1 plan
+
+Plans:
+- [ ] 11-01-PLAN.md — All four comms events: spawn_gate_opened, spawn_gate_resolved, awaiting_synthesis_started, awaiting_synthesis_complete
+
 ## Progress
 
 | Phase | Plans Complete | Status | Completed |
@@ -221,6 +238,7 @@ Plans:
 | 8. Dynamic Tree Visibility | 4/5 | In Progress|  |
 | 9. Spawn Safety | 4/4 | Complete   | 2026-03-09 |
 | 10. Leader Research Protocol | 4/4 | Complete    | 2026-03-09 |
+| 11. Observability Completeness | 0/1 | Pending | - |
 
 ---
 *Roadmap created: 2026-03-07*

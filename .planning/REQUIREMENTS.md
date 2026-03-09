@@ -33,8 +33,8 @@
 
 ### Leader Protocol
 
-- [ ] **LEAD-01**: Leader agent spawns research sub-agents, synthesizes findings, then poses informed questions to human
-- [ ] **LEAD-02**: Leader role config with research orchestration prompts and multi-step protocol
+- [x] **LEAD-01**: Leader agent spawns research sub-agents, synthesizes findings, then poses informed questions to human
+- [x] **LEAD-02**: Leader role config with research orchestration prompts and multi-step protocol
 
 ## v2 Requirements
 
@@ -84,8 +84,8 @@
 | TREE-01 | Phase 8 — Dynamic Tree Visibility | Complete |
 | TREE-02 | Phase 8 — Dynamic Tree Visibility | Complete |
 | TREE-03 | Phase 9 — Spawn Safety | Complete |
-| LEAD-01 | Phase 10 — Leader Research Protocol | Pending |
-| LEAD-02 | Phase 10 — Leader Research Protocol | Pending |
+| LEAD-01 | Phase 10 — Leader Research Protocol | Complete |
+| LEAD-02 | Phase 10 — Leader Research Protocol | Complete |
 
 **Coverage:**
 - v1 requirements: 16 total

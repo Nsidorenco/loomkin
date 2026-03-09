@@ -1228,12 +1228,57 @@ defmodule LoomkinWeb.WorkspaceLive do
     }
 
     socket = update_agent_card(socket, agent_name, %{pending_approval: pending_approval})
+
+    role_count = if is_map(roles), do: map_size(roles), else: length(roles)
+    cost = estimated_cost || 0.0
+
+    event = %{
+      id: Ecto.UUID.generate(),
+      type: :spawn_gate_opened,
+      agent: agent_name,
+      content:
+        "#{agent_name} requesting approval to spawn #{team_name} (#{role_count} roles, est. $#{Float.round(cost, 4)})",
+      timestamp: DateTime.utc_now(),
+      expanded: true,
+      metadata: %{gate_id: gate_id, team_name: team_name, estimated_cost: cost}
+    }
+
+    socket =
+      socket
+      |> stream_insert(:comms_events, event)
+      |> update(:comms_event_count, &(&1 + 1))
+
     {:noreply, socket}
   end
 
   def handle_info(%Jido.Signal{type: "agent.spawn.gate.resolved"} = sig, socket) do
     %{agent_name: agent_name} = sig.data
+    outcome = sig.data[:outcome] || :approved
+
     socket = update_agent_card(socket, agent_name, %{pending_approval: nil})
+
+    outcome_label =
+      case outcome do
+        :approved -> "approved"
+        :denied -> "denied"
+        _ -> "resolved"
+      end
+
+    event = %{
+      id: Ecto.UUID.generate(),
+      type: :spawn_gate_resolved,
+      agent: agent_name,
+      content: "Spawn gate #{outcome_label} for #{agent_name}",
+      timestamp: DateTime.utc_now(),
+      expanded: false,
+      metadata: %{outcome: outcome}
+    }
+
+    socket =
+      socket
+      |> stream_insert(:comms_events, event)
+      |> update(:comms_event_count, &(&1 + 1))
+
     {:noreply, socket}
   end
 
@@ -1477,7 +1522,8 @@ defmodule LoomkinWeb.WorkspaceLive do
         |> append_activity_event(event)
         |> update_agent_card(agent_name, %{
           content_type: :message,
-          latest_content: msg.content
+          latest_content: msg.content,
+          last_response: msg.content
         })
       else
         socket
@@ -4193,6 +4239,7 @@ defmodule LoomkinWeb.WorkspaceLive do
       latest_content: nil,
       content_type: :idle,
       last_tool: nil,
+      last_response: nil,
       pending_questions: [],
       model: nil,
       budget_used: 0,

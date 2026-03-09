@@ -168,6 +168,30 @@ defmodule LoomkinWeb.AgentCommsComponent do
       accent_border: "rgba(124, 58, 237, 0.30)",
       accent_text: "#8b5cf6",
       accent_bg: "rgba(124, 58, 237, 0.08)"
+    },
+    spawn_gate_opened: %{
+      icon: "🔮",
+      accent_border: "rgba(124, 58, 237, 0.40)",
+      accent_text: "#a78bfa",
+      accent_bg: "rgba(124, 58, 237, 0.12)"
+    },
+    spawn_gate_resolved: %{
+      icon: "✔",
+      accent_border: "rgba(124, 58, 237, 0.30)",
+      accent_text: "#8b5cf6",
+      accent_bg: "rgba(124, 58, 237, 0.08)"
+    },
+    awaiting_synthesis_started: %{
+      icon: "🔬",
+      accent_border: "rgba(99, 102, 241, 0.40)",
+      accent_text: "#818cf8",
+      accent_bg: "rgba(99, 102, 241, 0.12)"
+    },
+    awaiting_synthesis_complete: %{
+      icon: "✔",
+      accent_border: "rgba(99, 102, 241, 0.30)",
+      accent_text: "#6366f1",
+      accent_bg: "rgba(99, 102, 241, 0.08)"
     }
   }
 

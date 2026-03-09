@@ -195,6 +195,18 @@ defmodule Loomkin.Teams.RoleTest do
     end
   end
 
+  describe "research protocol content" do
+    @tag :skip
+    test "lead role system_prompt contains research protocol section" do
+      flunk("not implemented")
+    end
+
+    @tag :skip
+    test "researcher role system_prompt contains structured findings format" do
+      flunk("not implemented")
+    end
+  end
+
   describe "from_config/2" do
     test "creates a custom role from a config map" do
       config = %{

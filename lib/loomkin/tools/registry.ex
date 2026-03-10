@@ -131,6 +131,4 @@ defmodule Loomkin.Tools.Registry do
       :error -> s
     end
   end
-
-  defp safe_to_atom(s), do: s
 end

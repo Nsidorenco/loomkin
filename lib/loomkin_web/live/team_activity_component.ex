@@ -1284,7 +1284,7 @@ defmodule LoomkinWeb.TeamActivityComponent do
 
   # Fallback for any unknown event type
   defp render_event_card(assigns, event) do
-    config = Map.get(@type_config, event.type, fallback_config())
+    config = @type_config[event.type] || fallback_config()
     expanded = MapSet.member?(assigns.expanded_ids, event.id)
 
     assigns =

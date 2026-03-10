@@ -889,7 +889,7 @@ defmodule Loomkin.Session.Architect do
 
   defp extract_text(response) do
     classified = ReqLLM.Response.classify(response)
-    classified.text || ""
+    classified.text
   end
 
   defp call_llm(provider, model_id, messages, opts) do

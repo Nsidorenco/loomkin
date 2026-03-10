@@ -310,7 +310,7 @@ defmodule Loomkin.Teams.Tasks do
         model: usage[:model] || "unknown",
         task_type: task.task_type || task.title || "general",
         success: success?,
-        cost_usd: usage.cost || 0.0,
+        cost_usd: usage.cost,
         tokens_used: (usage[:input_tokens] || 0) + (usage[:output_tokens] || 0)
       })
     end

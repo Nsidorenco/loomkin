@@ -240,7 +240,7 @@ defmodule Loomkin.Providers.Ollama do
   def list_models do
     url = "#{ollama_api_url()}/api/tags"
 
-    case Req.get(url, receive_timeout: 5_000) do
+    case Req.get(url, receive_timeout: 5_000, retry: false) do
       {:ok, %Req.Response{status: 200, body: %{"models" => models}}} ->
         {:ok, models}
 

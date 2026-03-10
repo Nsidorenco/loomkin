@@ -155,10 +155,13 @@ defmodule Loomkin.Teams.AgentBroadcastTest do
       Process.sleep(200)
       state_after = :sys.get_state(pid)
 
-      # Agent should no longer be idle — send_message was called, loop attempted.
-      # In test env the loop crashes due to no DB, so status becomes :error.
-      assert state_after.status != :idle,
-             "Expected status to change from :idle, got: #{state_after.status}"
+      # inject_broadcast on idle agent delegates to send_message which appends
+      # the message. The LLM loop may crash in test (no API key), so we verify
+      # the message was processed rather than checking ephemeral status.
+      assert Enum.any?(state_after.messages, fn msg ->
+               msg.content == "hello idle agent"
+             end),
+             "Expected broadcast message to appear in agent messages"
     end
   end
 end

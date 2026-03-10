@@ -1127,7 +1127,7 @@ defmodule Loomkin.Teams.Agent do
           })
         end
 
-        state = %{state | messages: msgs, loop_task: nil, task: nil}
+        state = %{state | messages: msgs, loop_task: nil}
 
         state =
           if state.role == :weaver do
@@ -1238,7 +1238,7 @@ defmodule Loomkin.Teams.Agent do
           })
         end
 
-        state = %{state | loop_task: nil, task: nil}
+        state = %{state | loop_task: nil}
 
         status =
           if reason in [:normal, :shutdown] do

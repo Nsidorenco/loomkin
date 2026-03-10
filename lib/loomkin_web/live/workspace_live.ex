@@ -98,13 +98,18 @@ defmodule LoomkinWeb.WorkspaceLive do
       :new ->
         project_path = params["project_path"] || File.cwd!()
 
-        case Loomkin.Session.Persistence.find_latest_active_session(project_path) do
-          %{id: session_id} ->
-            {:ok, push_navigate(socket, to: ~p"/sessions/#{session_id}")}
+        if connected?(socket) do
+          case Loomkin.Session.Persistence.find_latest_active_session(project_path) do
+            %{id: session_id} ->
+              {:ok, push_navigate(socket, to: ~p"/sessions/#{session_id}")}
 
-          nil ->
-            session_id = Ecto.UUID.generate()
-            {:ok, start_and_subscribe(socket, session_id, project_path)}
+            nil ->
+              session_id = Ecto.UUID.generate()
+              {:ok, start_and_subscribe(socket, session_id, project_path)}
+          end
+        else
+          session_id = Ecto.UUID.generate()
+          {:ok, start_and_subscribe(socket, session_id, project_path)}
         end
 
       :show ->
@@ -708,10 +713,6 @@ defmodule LoomkinWeb.WorkspaceLive do
        |> assign(editing_explorer_path: false)
        |> put_flash(:error, "Directory not found: #{path}")}
     end
-  end
-
-  def handle_event("focus_card_agent", %{"agent" => agent_name}, socket) do
-    {:noreply, assign(socket, focused_agent: agent_name, inspector_mode: :pinned)}
   end
 
   def handle_event("toggle_mode", _, socket) do

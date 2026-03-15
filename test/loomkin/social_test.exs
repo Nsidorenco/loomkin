@@ -6,7 +6,7 @@ defmodule Loomkin.SocialTest do
 
   import Loomkin.AccountsFixtures
 
-  defp create_user(_context \\ %{}) do
+  defp create_user(_context) do
     user = user_fixture()
     %{user: user}
   end

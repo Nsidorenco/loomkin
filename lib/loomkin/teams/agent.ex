@@ -2800,6 +2800,9 @@ defmodule Loomkin.Teams.Agent do
     # Orchestrator mode: Lead agents with specialists lose tactical tools.
     {tools, system_prompt} = maybe_apply_orchestrator_mode(state, system_prompt)
 
+    # Kin agent customization: append user-defined extra instructions if present.
+    system_prompt = maybe_inject_system_prompt_extra(system_prompt, state)
+
     # A resolver fn allows AgentLoop to read the latest project_path from
     # team ETS at every tool call, even when the Task captured stale opts.
     project_path_resolver = fn -> resolve_project_path(team_id, state.project_path) end
@@ -2943,6 +2946,16 @@ defmodule Loomkin.Teams.Agent do
       {Role.orchestrator_tools(), system_prompt <> "\n\n" <> Role.orchestrator_prompt_addition()}
     else
       {state.tools, system_prompt}
+    end
+  end
+
+  defp maybe_inject_system_prompt_extra(system_prompt, state) do
+    case Loomkin.Repo.get_by(Loomkin.Schemas.KinAgent, name: to_string(state.name)) do
+      %{system_prompt_extra: extra} when is_binary(extra) and extra != "" ->
+        system_prompt <> "\n\n## Additional Instructions\n" <> extra
+
+      _ ->
+        system_prompt
     end
   end
 

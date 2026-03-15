@@ -746,6 +746,11 @@ defmodule Loomkin.Session do
 
     Logger.info("[Kin:session] spawning bootstrap agents team=#{team_id}")
 
+    # Load skills from project disk into Jido registry
+    if project_path do
+      Loomkin.Skills.Resolver.load_from_disk(project_path)
+    end
+
     # Load kin agents from DB for concierge prompt injection
     kin_agents =
       try do

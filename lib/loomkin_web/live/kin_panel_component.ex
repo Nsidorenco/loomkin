@@ -801,13 +801,21 @@ defmodule LoomkinWeb.KinPanelComponent do
   end
 
   def handle_event("share_kin", %{"id" => id}, socket) do
+    user = socket.assigns[:current_scope] && socket.assigns.current_scope.user
+
+    if is_nil(user) do
+      {:noreply, socket}
+    else
+      do_share_kin(id, user, socket)
+    end
+  end
+
+  defp do_share_kin(id, user, socket) do
     case Kin.get_kin(id) do
       nil ->
         {:noreply, socket}
 
       kin ->
-        user = socket.assigns[:current_scope] && socket.assigns.current_scope.user
-
         content = %{
           "role" => to_string(kin.role),
           "system_prompt_extra" => kin.system_prompt_extra || "",

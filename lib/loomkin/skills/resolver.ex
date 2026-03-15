@@ -6,6 +6,8 @@ defmodule Loomkin.Skills.Resolver do
 
   import Ecto.Query
 
+  require Logger
+
   alias Jido.AI.Skill.Registry, as: SkillRegistry
   alias Jido.AI.Skill.Spec
   alias Loomkin.Repo
@@ -18,15 +20,26 @@ defmodule Loomkin.Skills.Resolver do
 
   Returns `{:ok, count}` or `{:error, reason}`.
   """
-  @spec load_from_disk(String.t()) :: {:ok, non_neg_integer()} | {:error, term()}
+  @spec load_from_disk(String.t()) :: {:ok, non_neg_integer()}
   def load_from_disk(project_path) do
     skills_path = Path.join(project_path, ".agents/skills")
 
     if File.dir?(skills_path) do
-      SkillRegistry.load_from_paths([skills_path])
+      case SkillRegistry.load_from_paths([skills_path]) do
+        {:ok, count} ->
+          {:ok, count}
+
+        {:error, reason} ->
+          Logger.warning("[Skills] Failed to load skills from #{skills_path}: #{inspect(reason)}")
+          {:ok, 0}
+      end
     else
       {:ok, 0}
     end
+  rescue
+    e ->
+      Logger.warning("[Skills] Unexpected error loading skills from disk: #{inspect(e)}")
+      {:ok, 0}
   end
 
   @doc """
@@ -42,6 +55,7 @@ defmodule Loomkin.Skills.Resolver do
     user
     |> Social.list_user_snippets(type: :skill)
     |> Enum.map(&snippet_to_spec/1)
+    |> Enum.reject(&is_nil/1)
   end
 
   @doc """
@@ -86,6 +100,8 @@ defmodule Loomkin.Skills.Resolver do
   # Private helpers
   # ---------------------------------------------------------------------------
 
+  @valid_skill_name ~r/^[a-z0-9]+(-[a-z0-9]+)*$/
+
   defp snippet_to_spec(snippet) do
     frontmatter = get_in(snippet.content, ["frontmatter"]) || %{}
     body = get_in(snippet.content, ["body"]) || ""
@@ -93,6 +109,14 @@ defmodule Loomkin.Skills.Resolver do
     name =
       Map.get(frontmatter, "name") ||
         Snippet.slugify(snippet.title)
+
+    unless is_binary(name) and name != "" and Regex.match?(@valid_skill_name, name) do
+      Logger.warning(
+        "[Skills] Skipping snippet id=#{snippet.id} — invalid skill name: #{inspect(name)}"
+      )
+
+      throw(:invalid_name)
+    end
 
     description =
       Map.get(frontmatter, "description") ||
@@ -114,6 +138,8 @@ defmodule Loomkin.Skills.Resolver do
       tags: snippet.tags || [],
       allowed_tools: allowed_tools
     }
+  catch
+    :invalid_name -> nil
   end
 
   defp extract_body({:inline, text}), do: {:ok, text}
@@ -124,7 +150,7 @@ defmodule Loomkin.Skills.Resolver do
     result =
       from(s in Snippet,
         where: s.type == :skill,
-        where: fragment("?->>'name' = ?", s.content["frontmatter"], ^skill_name),
+        where: fragment("?->'frontmatter'->>'name' = ?", s.content, ^skill_name),
         order_by: [desc: s.inserted_at],
         limit: 1
       )

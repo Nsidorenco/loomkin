@@ -100,7 +100,8 @@ defmodule LoomkinWeb.WorkspaceLive do
         # Cached set of followed user IDs for presence filtering (MapSet)
         following_ids: MapSet.new(),
         # Save chat modal
-        show_save_chat_modal: false
+        show_save_chat_modal: false,
+        multi_tenant: Application.get_env(:loomkin, :multi_tenant, false)
       )
       |> stream(:comms_events, [], limit: -500)
 
@@ -239,7 +240,7 @@ defmodule LoomkinWeb.WorkspaceLive do
 
         # Subscribe to social presence when multi-tenant with a logged-in user
         socket =
-          if Application.get_env(:loomkin, :multi_tenant) do
+          if socket.assigns.multi_tenant do
             scope = socket.assigns[:current_scope]
             user = scope && scope.user
 
@@ -746,6 +747,14 @@ defmodule LoomkinWeb.WorkspaceLive do
     {:noreply, assign(socket, show_save_chat_modal: false)}
   end
 
+  def handle_event("save_chat_log", _params, %{assigns: %{current_scope: nil}} = socket) do
+    {:noreply, socket}
+  end
+
+  def handle_event("save_chat_log", _params, %{assigns: %{current_scope: %{user: nil}}} = socket) do
+    {:noreply, socket}
+  end
+
   def handle_event("save_chat_log", params, socket) do
     user = socket.assigns.current_scope.user
     session_id = socket.assigns.session_id
@@ -755,11 +764,18 @@ defmodule LoomkinWeb.WorkspaceLive do
         {:noreply, put_flash(socket, :error, "Session not found")}
 
       session ->
+        visibility =
+          case params["visibility"] do
+            "public" -> :public
+            "unlisted" -> :unlisted
+            _ -> :private
+          end
+
         attrs = %{
           title: params["title"] || session.title || "Chat Log",
           description: params["description"] || "",
           tags: ["chat"],
-          visibility: String.to_existing_atom(params["visibility"] || "private"),
+          visibility: visibility,
           agent_count: length(socket.assigns[:cached_agents] || [])
         }
 
@@ -3808,12 +3824,17 @@ defmodule LoomkinWeb.WorkspaceLive do
       <%!-- Save Chat modal overlay --%>
       <div
         :if={@show_save_chat_modal}
-        class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
-        phx-click-away="close_save_chat_modal"
+        class="fixed inset-0 z-50 flex items-center justify-center"
+        id="save-chat-backdrop"
       >
-        <div class="glass rounded-2xl p-6 w-full max-w-md space-y-4 animate-fade-in">
+        <div
+          class="absolute inset-0 bg-black/60 backdrop-blur-sm"
+          phx-click="close_save_chat_modal"
+          aria-hidden="true"
+        />
+        <div class="relative z-10 glass rounded-2xl p-6 w-full max-w-md space-y-4 animate-fade-in">
           <h2 class="text-lg font-semibold text-white">Save Chat as Snippet</h2>
-          <form phx-submit="save_chat_log" class="space-y-4">
+          <.form for={%{}} id="save-chat-form" phx-submit="save_chat_log" class="space-y-4">
             <div>
               <label class="block text-xs font-medium text-gray-400 mb-1">Title</label>
               <input
@@ -3858,7 +3879,7 @@ defmodule LoomkinWeb.WorkspaceLive do
                 Save
               </button>
             </div>
-          </form>
+          </.form>
         </div>
       </div>
 
@@ -4041,7 +4062,7 @@ defmodule LoomkinWeb.WorkspaceLive do
           <%!-- Save Chat button (multi-tenant mode only) --%>
           <button
             :if={
-              Application.get_env(:loomkin, :multi_tenant) && @current_scope && @current_scope.user &&
+              @multi_tenant && @current_scope && @current_scope.user &&
                 @session_id
             }
             phx-click="open_save_chat_modal"

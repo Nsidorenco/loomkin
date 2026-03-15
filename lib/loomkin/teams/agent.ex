@@ -33,6 +33,8 @@ defmodule Loomkin.Teams.Agent do
     :status,
     :model,
     :project_path,
+    # Cached from KinAgent DB record at init to avoid a per-loop DB query.
+    system_prompt_extra: nil,
     tools: [],
     messages: [],
     task: nil,
@@ -232,6 +234,12 @@ defmodule Loomkin.Teams.Agent do
 
         {:ok, sub_ids} = Comms.subscribe(team_id, name)
 
+        system_prompt_extra =
+          case Loomkin.Repo.get_by(Loomkin.Schemas.KinAgent, name: to_string(name)) do
+            %{system_prompt_extra: extra} when is_binary(extra) and extra != "" -> extra
+            _ -> nil
+          end
+
         state = %__MODULE__{
           team_id: team_id,
           session_id: session_id,
@@ -243,7 +251,8 @@ defmodule Loomkin.Teams.Agent do
           project_path: project_path,
           tools: role_config.tools,
           permission_mode: permission_mode,
-          subscription_ids: sub_ids
+          subscription_ids: sub_ids,
+          system_prompt_extra: system_prompt_extra
         }
 
         # Monitor via AgentWatcher BEFORE init completes — guarantees no gap
@@ -2816,6 +2825,9 @@ defmodule Loomkin.Teams.Agent do
       agent_name: state.name,
       team_id: state.team_id,
       session_id: state.session_id,
+      # Agents do not carry an authenticated user — disk skills load via
+      # load_from_disk/1 at session bootstrap; DB skills require a user.
+      user: nil,
       reasoning_strategy: state.role_config.reasoning_strategy,
       check_permission: permission_callback,
       checkpoint: checkpoint_callback,
@@ -2950,8 +2962,8 @@ defmodule Loomkin.Teams.Agent do
   end
 
   defp maybe_inject_system_prompt_extra(system_prompt, state) do
-    case Loomkin.Repo.get_by(Loomkin.Schemas.KinAgent, name: to_string(state.name)) do
-      %{system_prompt_extra: extra} when is_binary(extra) and extra != "" ->
+    case state.system_prompt_extra do
+      extra when is_binary(extra) and extra != "" ->
         system_prompt <> "\n\n## Additional Instructions\n" <> extra
 
       _ ->

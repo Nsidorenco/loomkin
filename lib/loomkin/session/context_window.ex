@@ -139,8 +139,10 @@ defmodule Loomkin.Session.ContextWindow do
     if manifests == [] do
       system_parts
     else
-      skills_text = Jido.AI.Skill.Prompt.render(manifests, include_body: false)
-      system_parts ++ [skills_text]
+      case Jido.AI.Skill.Prompt.render(manifests, include_body: false) do
+        "" -> system_parts
+        skills_text -> system_parts ++ [skills_text]
+      end
     end
   rescue
     _ -> system_parts

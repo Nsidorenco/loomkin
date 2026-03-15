@@ -25,12 +25,13 @@ defmodule LoomkinWeb.SnippetLive do
   end
 
   defp apply_action(socket, :show, %{"username" => username, "slug" => slug}) do
-    viewer =
-      if socket.assigns[:current_scope],
-        do: socket.assigns.current_scope.user,
-        else: nil
+    current_user =
+      case socket.assigns[:current_scope] do
+        %{user: user} -> user
+        _ -> nil
+      end
 
-    case Social.get_snippet_by_slug(username, slug, viewer) do
+    case Social.get_snippet_by_slug(username, slug, current_user) do
       nil ->
         socket
         |> put_flash(:error, "Snippet not found.")
@@ -38,11 +39,6 @@ defmodule LoomkinWeb.SnippetLive do
 
       snippet ->
         snippet = Repo.preload(snippet, [:user, forked_from: :user])
-
-        current_user =
-          if socket.assigns[:current_scope],
-            do: socket.assigns.current_scope.user,
-            else: nil
 
         is_owner = current_user != nil and current_user.id == snippet.user_id
         is_favorited = current_user != nil and Social.favorited?(current_user, snippet)
@@ -243,11 +239,7 @@ defmodule LoomkinWeb.SnippetLive do
     content = snippet.content || %{}
     current_user = socket.assigns.current_scope.user
 
-    role =
-      case content["role"] do
-        nil -> :coder
-        r -> String.to_existing_atom(r)
-      end
+    role = safe_to_role(content["role"])
 
     attrs = %{
       name: Snippet.slugify(snippet.title),
@@ -266,7 +258,12 @@ defmodule LoomkinWeb.SnippetLive do
         {:noreply, put_flash(socket, :info, "Kin agent installed! Check your Kin panel.")}
 
       {:error, _changeset} ->
-        {:noreply, put_flash(socket, :error, "A kin agent with this name may already exist.")}
+        {:noreply,
+         put_flash(
+           socket,
+           :error,
+           "Could not install kin agent. It may already exist or have invalid configuration."
+         )}
     end
   end
 
@@ -297,21 +294,17 @@ defmodule LoomkinWeb.SnippetLive do
   # Form events
   # ---------------------------------------------------------------------------
 
-  def handle_event("type_changed", %{"snippet" => %{"type" => type_str}}, socket) do
-    type = String.to_existing_atom(type_str)
-    {:noreply, assign(socket, snippet_type: type)}
-  end
-
   def handle_event("validate", params, socket) do
     snippet_params = params["snippet"] || %{}
-    merged = merge_type_fields(params, snippet_params, socket.assigns.snippet_type)
+    snippet_type = derive_snippet_type(snippet_params["type"], socket.assigns.snippet_type)
+    merged = merge_type_fields(params, snippet_params, snippet_type)
 
     changeset =
       (socket.assigns.snippet || %Snippet{})
       |> Snippet.changeset(merged)
       |> Map.put(:action, :validate)
 
-    {:noreply, assign(socket, form: to_form(changeset))}
+    {:noreply, assign(socket, form: to_form(changeset), snippet_type: snippet_type)}
   end
 
   def handle_event("save", params, socket) do
@@ -354,6 +347,12 @@ defmodule LoomkinWeb.SnippetLive do
          |> put_flash(:info, "Snippet updated!")
          |> push_navigate(to: ~p"/@#{username}/#{updated.slug}")}
 
+      {:error, :unauthorized} ->
+        {:noreply,
+         socket
+         |> put_flash(:error, "You do not have permission to edit this snippet.")
+         |> push_navigate(to: ~p"/")}
+
       {:error, changeset} ->
         {:noreply, assign(socket, form: to_form(changeset))}
     end
@@ -362,6 +361,18 @@ defmodule LoomkinWeb.SnippetLive do
   # ---------------------------------------------------------------------------
   # Helpers
   # ---------------------------------------------------------------------------
+
+  defp safe_to_role(role_str)
+       when role_str in ~w(lead coder researcher reviewer tester concierge weaver architect expert),
+       do: String.to_existing_atom(role_str)
+
+  defp safe_to_role(_), do: :coder
+
+  defp derive_snippet_type("skill", _current), do: :skill
+  defp derive_snippet_type("prompt", _current), do: :prompt
+  defp derive_snippet_type("kin_agent", _current), do: :kin_agent
+  defp derive_snippet_type("chat_log", _current), do: :chat_log
+  defp derive_snippet_type(_, current), do: current
 
   defp merge_type_fields(params, snippet_params, :skill) do
     skill_name =
@@ -412,10 +423,18 @@ defmodule LoomkinWeb.SnippetLive do
 
   defp merge_type_fields(_params, snippet_params, _type), do: snippet_params
 
-  defp get_default_project_path(_socket) do
-    case Persistence.list_projects() do
-      [%{project_path: path} | _] -> path
-      [] -> nil
+  defp get_default_project_path(socket) do
+    # Prefer an explicit project_path assign set in the session (e.g. carried from WorkspaceLive).
+    # Fall back to the most-recently-active project known to Persistence.
+    case socket.assigns[:project_path] do
+      path when is_binary(path) and path != "" ->
+        path
+
+      _ ->
+        case Persistence.list_projects() do
+          [%{project_path: path} | _] -> path
+          [] -> nil
+        end
     end
   end
 
@@ -665,7 +684,6 @@ defmodule LoomkinWeb.SnippetLive do
               field={@form[:type]}
               type="select"
               label="Type"
-              phx-change="type_changed"
               options={[
                 {"Skill", "skill"},
                 {"Prompt", "prompt"},
@@ -771,7 +789,7 @@ defmodule LoomkinWeb.SnippetLive do
         <textarea
           id="skill_body"
           name="skill_body"
-          placeholder="# My Skill\n\nDescribe what this skill teaches agents to do.\n\n## When to use\n\n...\n\n## Instructions\n\n..."
+          placeholder="Describe what this skill teaches agents to do..."
           class="w-full min-h-[400px] bg-surface-1 border border-border-subtle rounded-lg px-3 py-2 text-sm text-gray-200 placeholder-gray-600 font-mono leading-relaxed focus:outline-none focus:border-brand/60 resize-y"
         ><%= @skill_body %></textarea>
       </div>

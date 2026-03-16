@@ -69,13 +69,19 @@ defmodule Loomkin.Teams.AgentProactivityTest do
   end
 
   describe "context pressure indicator at >50%" do
-    test "appends pressure message when team agent exceeds 50% usage", %{team_id: team_id} do
-      # Build messages that consume >50% of model context
-      # Default limit 128k, 50% = 64k tokens = ~256k chars
-      big_content = String.duplicate("y", 280_000)
+    test "appends pressure message when team agent exceeds dynamic threshold", %{
+      team_id: team_id
+    } do
+      # Build messages that consume >71% of model context (dynamic headroom for 128K)
+      # Default limit 128k, threshold ~71% = ~90,880 tokens
+      # budget.history = 116,224 tokens. Use many small messages that pack tightly
+      # so select_recent keeps enough to exceed the threshold.
+      # 40K chars = 10K tokens + 4 overhead per msg. 12 messages = ~120K tokens,
+      # trimmed to fit 116K budget → usage ≈ (system + ~116K) / 128K ≈ 91% > 71%
+      big_content = String.duplicate("y", 40_000)
 
       messages =
-        Enum.map(1..4, fn i ->
+        Enum.map(1..12, fn i ->
           role = if rem(i, 2) == 1, do: :user, else: :assistant
           %{role: role, content: big_content}
         end)

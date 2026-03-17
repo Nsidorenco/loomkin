@@ -129,12 +129,19 @@ jobs:
       - run: mix deps.get
 
       - name: Run tests
+        id: tests
+        continue-on-error: true
         env:
           DB_PORT: 5432
         run: mix test --warnings-as-errors
 
       - name: Retry failed tests
-        if: failure()
+        id: retry
+        if: steps.tests.outcome == 'failure'
         env:
           DB_PORT: 5432
         run: mix test --failed
+
+      - name: Fail if tests failed
+        if: steps.tests.outcome == 'failure' && steps.retry.outcome != 'success'
+        run: exit 1

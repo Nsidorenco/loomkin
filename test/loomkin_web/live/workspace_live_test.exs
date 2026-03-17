@@ -28,8 +28,8 @@ defmodule LoomkinWeb.WorkspaceLiveTest do
       assert html =~ "message-input"
       assert html =~ "send_message"
 
-      # MissionControlPanelComponent renders the agent comms section
-      assert html =~ "agent-comms"
+      # MissionControlPanelComponent renders the tab switcher (kin/comms)
+      assert html =~ "switch_tab"
 
       # No inline defp render_ output should appear — all rendering is via components
       refute html =~ "render_agent_card"

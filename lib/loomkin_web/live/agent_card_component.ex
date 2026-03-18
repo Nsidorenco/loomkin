@@ -126,6 +126,64 @@ defmodule LoomkinWeb.AgentCardComponent do
   end
 
   @impl true
+  def render(%{compact: true} = assigns) do
+    color = LoomkinWeb.AgentColors.agent_color(assigns.card.name)
+    assigns = assign(assigns, :agent_color, color)
+
+    ~H"""
+    <div
+      id={"agent-card-compact-#{@card.name}"}
+      class="group flex items-center gap-2.5 px-3 py-2 rounded-lg transition-colors hover:bg-surface-2/50"
+    >
+      <%!-- Mini avatar --%>
+      <div
+        class="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 text-xs font-bold relative"
+        style={"background: #{@agent_color}15; color: #{@agent_color};"}
+      >
+        {String.first(@card.name) |> String.upcase()}
+        <span class={[
+          "absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full ring-2 ring-surface-0",
+          status_dot_class(@card.status)
+        ]} />
+      </div>
+
+      <%!-- Name + status --%>
+      <div class="flex-1 min-w-0 flex items-center gap-2">
+        <span
+          class="text-xs font-semibold truncate"
+          style={"color: #{@agent_color};"}
+        >
+          {@card.name}
+        </span>
+        <span class={[
+          "text-[10px] font-medium",
+          status_pill_text_class(@card.status)
+        ]}>
+          {status_label(@card.status)}
+        </span>
+        <%!-- Truncated current thought --%>
+        <span
+          :if={@card.content_type == :thinking && @card.latest_content}
+          class="text-[10px] text-muted/40 truncate max-w-[180px]"
+        >
+          {String.slice(@card.latest_content || "", 0, 60)}
+        </span>
+      </div>
+
+      <%!-- Reply button --%>
+      <button
+        phx-click="reply_to_card_agent"
+        phx-value-agent={@card.name}
+        phx-value-team-id={@team_id}
+        aria-label={"Reply to #{@card.name}"}
+        class="text-muted hover:text-brand p-1 rounded-lg hover:bg-surface-3 flex-shrink-0 transition-colors opacity-40 group-hover:opacity-100"
+      >
+        <.icon name="hero-chat-bubble-left-mini" class="w-3.5 h-3.5" />
+      </button>
+    </div>
+    """
+  end
+
   def render(assigns) do
     color = LoomkinWeb.AgentColors.agent_color(assigns.card.name)
     assigns = assign(assigns, :agent_color, color)

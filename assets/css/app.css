@@ -1148,22 +1148,6 @@ body {
   color: var(--accent-rose);
 }
 
-/* Decision graph — new node animation */
-@keyframes graph-node-fade-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-@keyframes graph-node-glow-pulse {
-  0% { stroke-opacity: 0.8; }
-  50% { stroke-opacity: 0.3; }
-  100% { stroke-opacity: 0; }
-}
-.graph-node-new {
-  animation: graph-node-fade-in 0.4s ease-out;
-}
-.graph-node-glow {
-  animation: graph-node-glow-pulse 1.5s ease-out forwards;
-}
 
 /* Skeleton loading */
 .skeleton {
@@ -1526,12 +1510,27 @@ body {
   pointer-events: none;
 }
 
-@keyframes conflict-pulse {
-  0%, 100% { stroke-opacity: 0.5; }
-  50% { stroke-opacity: 1; }
+/* ══════════════════════════════════════════
+   Idle Agent Collapsible Section
+   ══════════════════════════════════════════ */
+
+.idle-agents-section {
+  border-top: 1px solid var(--border-subtle);
+  padding-top: 0.5rem;
 }
-.conflict-glow {
-  animation: conflict-pulse 1.5s ease-in-out infinite;
+
+.idle-agents-list {
+  animation: idle-list-reveal 0.2s ease-out;
+}
+
+@keyframes idle-list-reveal {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Active section separator glow */
+.agent-card-grid.grid-alive {
+  background: radial-gradient(ellipse at center, rgba(52, 211, 153, 0.03) 0%, transparent 70%);
 }
 
 /* ══════════════════════════════════════════
@@ -1662,6 +1661,50 @@ body {
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--text-muted);
+}
+
+/* ══════════════════════════════════════════
+   Compact Agent Pills — Collapsible Idle Agents
+   ══════════════════════════════════════════ */
+
+/* Idle agents row: horizontal flow */
+.agent-idle-row {
+  padding: 2px 0;
+}
+
+/* Compact agent pill — clickable mini-card for idle agents */
+.agent-compact-pill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px 4px 4px;
+  border-radius: 8px;
+  background: var(--surface-1);
+  border: 1px solid var(--border-subtle);
+  transition: all 0.15s ease;
+  cursor: pointer;
+  max-width: 160px;
+}
+
+.agent-compact-pill:hover {
+  background: var(--surface-2);
+  border-color: var(--border-default);
+  box-shadow: 0 0 8px rgba(180, 160, 232, 0.06);
+}
+
+/* Section divider with label */
+.section-divider {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+}
+
+.section-divider .divider-line {
+  flex: 1;
+  height: 1px;
+  background: var(--border-subtle);
+  opacity: 0.5;
 }
 
 /* ══════════════════════════════════════════

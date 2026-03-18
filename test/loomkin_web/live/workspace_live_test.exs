@@ -69,14 +69,6 @@ defmodule LoomkinWeb.WorkspaceLiveTest do
       assert function_exported?(LoomkinWeb.ComposerComponent, :update, 2)
     end
 
-    test "sidebar panel component exists and is a live component" do
-      assert {:module, LoomkinWeb.SidebarPanelComponent} =
-               Code.ensure_loaded(LoomkinWeb.SidebarPanelComponent)
-
-      assert function_exported?(LoomkinWeb.SidebarPanelComponent, :render, 1)
-      assert function_exported?(LoomkinWeb.SidebarPanelComponent, :update, 2)
-    end
-
     test "mission control panel component exists and is a live component" do
       assert {:module, LoomkinWeb.MissionControlPanelComponent} =
                Code.ensure_loaded(LoomkinWeb.MissionControlPanelComponent)
@@ -85,14 +77,14 @@ defmodule LoomkinWeb.WorkspaceLiveTest do
       assert function_exported?(LoomkinWeb.MissionControlPanelComponent, :update, 2)
     end
 
-    test "workspace_live references all four extracted components in source" do
+    test "workspace_live references core extracted components in source" do
       {:ok, source} =
         File.read("lib/loomkin_web/live/workspace_live.ex")
 
       assert source =~ "LoomkinWeb.CommandPaletteComponent"
       assert source =~ "LoomkinWeb.ComposerComponent"
-      assert source =~ "LoomkinWeb.SidebarPanelComponent"
       assert source =~ "LoomkinWeb.MissionControlPanelComponent"
+      assert source =~ "LoomkinWeb.ContextInspectorComponent"
     end
 
     test "workspace_live has no inline defp render_ functions" do
@@ -109,7 +101,6 @@ defmodule LoomkinWeb.WorkspaceLiveTest do
 
       assert source =~ "{:command_palette_action,"
       assert source =~ "{:composer_event,"
-      assert source =~ "{:sidebar_event,"
       assert source =~ "{:mission_control_event,"
     end
   end

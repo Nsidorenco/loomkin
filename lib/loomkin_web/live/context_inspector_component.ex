@@ -2,56 +2,34 @@ defmodule LoomkinWeb.ContextInspectorComponent do
   @moduledoc """
   Right-panel agent deep-focus sidebar for Mission Control mode.
 
-  Always agent-scoped — shows the focused agent's activity and tools.
+  Always agent-scoped — shows the focused agent's activity stream.
   When no agent is focused, shows a prompt to select one.
   """
 
   use LoomkinWeb, :live_component
 
-  @tabs [:activity, :tools]
-
   @impl true
   def mount(socket) do
-    {:ok, assign(socket, collapsed: false, active_tab: :activity)}
+    {:ok, assign(socket, collapsed: false)}
   end
 
   @impl true
   def update(assigns, socket) do
-    prev_focused = socket.assigns[:focused_agent]
-    socket = assign(socket, assigns)
-
-    # Reset tab to :activity when focus changes to a new agent
-    socket =
-      if socket.assigns[:focused_agent] && socket.assigns[:focused_agent] != prev_focused do
-        assign(socket, active_tab: :activity)
-      else
-        socket
-      end
-
-    {:ok, socket}
+    {:ok, assign(socket, assigns)}
   end
-
-  @valid_tabs ~w(activity tools)
 
   @impl true
-  def handle_event("switch_tab", %{"tab" => tab}, socket)
-      when tab in @valid_tabs do
-    {:noreply, assign(socket, active_tab: String.to_existing_atom(tab))}
-  end
-
   def handle_event("toggle_collapse", _params, socket) do
     {:noreply, assign(socket, collapsed: !socket.assigns.collapsed)}
   end
 
   @impl true
   def render(assigns) do
-    assigns = assign(assigns, :tabs, @tabs)
-
     ~H"""
     <div id="inspector-panel" class={panel_class(@collapsed)} phx-hook="ResizablePanel">
       <.resize_handle collapsed={@collapsed} />
       <%= if @collapsed do %>
-        <.collapsed_strip tabs={@tabs} active_tab={@active_tab} myself={@myself} />
+        <.collapsed_strip myself={@myself} />
       <% else %>
         <%= if @focused_agent && @focused_card do %>
           <.agent_header
@@ -60,19 +38,12 @@ defmodule LoomkinWeb.ContextInspectorComponent do
             inspector_mode={@inspector_mode}
             myself={@myself}
           />
-          <.tab_bar
-            tabs={@tabs}
-            active_tab={@active_tab}
-            agent_color={agent_color(@focused_agent)}
-            myself={@myself}
-          />
           <div id="inspector-agent-content" class="flex-1 overflow-auto min-h-0 relative bg-surface-0">
-            <div class="tab-content-enter h-full">
-              {render_tab(@active_tab, assigns)}
+            <div class="h-full">
+              {render_activity(assigns)}
             </div>
           </div>
         <% else %>
-          <.tab_bar tabs={@tabs} active_tab={@active_tab} agent_color={nil} myself={@myself} />
           <.empty_state myself={@myself} />
         <% end %>
       <% end %>
@@ -158,42 +129,12 @@ defmodule LoomkinWeb.ContextInspectorComponent do
     ~H"""
     <div class="flex h-full w-full items-center justify-center gap-0.5 px-1 py-1 xl:flex-col xl:items-center xl:justify-start xl:px-0 xl:py-1.5 bg-surface-1">
       <button
-        :for={tab <- @tabs}
-        phx-click="switch_tab"
-        phx-value-tab={tab}
+        phx-click="toggle_collapse"
         phx-target={@myself}
-        class={collapsed_tab_class(@active_tab, tab)}
-        title={tab_label(tab)}
+        class="interactive p-1.5 rounded-md text-muted"
+        title="Expand inspector"
       >
-        <span>{tab_icon(tab)}</span>
-      </button>
-
-      <div class="xl:mt-auto xl:mb-1">
-        <button
-          phx-click="toggle_collapse"
-          phx-target={@myself}
-          class="interactive p-1 rounded-md text-muted"
-          title="Expand panel"
-        >
-          <.icon name="hero-chevron-left-mini" class="w-3 h-3" />
-        </button>
-      </div>
-    </div>
-    """
-  end
-
-  defp tab_bar(assigns) do
-    ~H"""
-    <div class="flex items-center gap-0.5 overflow-x-auto px-2 py-1.5 flex-shrink-0 bg-surface-1/60">
-      <button
-        :for={tab <- @tabs}
-        phx-click="switch_tab"
-        phx-value-tab={tab}
-        phx-target={@myself}
-        class={tab_button_class(@active_tab, tab, @agent_color)}
-      >
-        <span>{tab_icon(tab)}</span>
-        <span class="text-[10px]">{tab_label(tab)}</span>
+        <.icon name="hero-chevron-left-mini" class="w-3 h-3" />
       </button>
     </div>
     """
@@ -201,7 +142,7 @@ defmodule LoomkinWeb.ContextInspectorComponent do
 
   # ── Tab content ─────────────────────────────────────────────────────
 
-  defp render_tab(:activity, assigns) do
+  defp render_activity(assigns) do
     color = agent_color(assigns.focused_agent)
     assigns = assign(assigns, :color, color)
 
@@ -328,43 +269,6 @@ defmodule LoomkinWeb.ContextInspectorComponent do
     """
   end
 
-  defp render_tab(:tools, assigns) do
-    ~H"""
-    <div class="p-3 space-y-2">
-      <div class="flex items-center gap-2 mb-3">
-        <span class="text-[10px] font-medium text-muted uppercase tracking-wider">Tool History</span>
-      </div>
-
-      <%= if @focused_card[:last_tool] do %>
-        <div class="flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-surface-1/80  animate-fade-in">
-          <span class="text-sm flex-shrink-0">{tool_emoji(@focused_card.last_tool.name)}</span>
-          <div class="min-w-0 flex-1">
-            <span class="text-[11px] font-mono font-medium text-secondary">
-              {@focused_card.last_tool.name}
-            </span>
-            <p
-              :if={@focused_card.last_tool[:target]}
-              class="text-[10px] font-mono text-muted truncate"
-            >
-              {@focused_card.last_tool.target}
-            </p>
-            <p
-              :if={@focused_card.last_tool[:result]}
-              class="text-[10px] text-muted truncate mt-0.5"
-            >
-              {@focused_card.last_tool.result}
-            </p>
-          </div>
-        </div>
-      <% else %>
-        <div class="rounded-xl  py-8 text-center">
-          <p class="text-xs text-muted italic">No tool calls yet</p>
-        </div>
-      <% end %>
-    </div>
-    """
-  end
-
   # ── Styling helpers ─────────────────────────────────────────────────
 
   defp panel_class(true = _collapsed),
@@ -374,43 +278,6 @@ defmodule LoomkinWeb.ContextInspectorComponent do
   defp panel_class(false = _collapsed),
     do:
       "inspector-panel relative w-full h-[20rem] xl:w-80 xl:h-full flex-shrink-0 flex flex-col bg-surface-1/80 backdrop-blur-sm transition-colors duration-300 ease-in-out"
-
-  defp tab_button_class(active, tab, accent_color) do
-    base =
-      "relative flex shrink-0 items-center gap-1 whitespace-nowrap px-2 py-1.5 text-[11px] font-medium rounded-md transition-all duration-200 interactive "
-
-    if active == tab do
-      active_class =
-        "after:absolute after:bottom-0 after:left-1 after:right-1 after:h-[1.5px] after:rounded-full "
-
-      if accent_color do
-        base <> active_class <> "after:bg-current"
-      else
-        base <> active_class <> "text-brand after:bg-violet-500"
-      end
-    else
-      base <> "text-muted"
-    end
-  end
-
-  defp collapsed_tab_class(active, tab) do
-    base = "p-1.5 rounded-md transition-all duration-200 interactive "
-
-    if active == tab do
-      base <> "text-brand bg-white/[0.04]"
-    else
-      base <> "text-muted"
-    end
-  end
-
-  defp tab_icon(:activity),
-    do: raw("<span class=\"hero-bolt-mini inline-block w-4 h-4\"></span>")
-
-  defp tab_icon(:tools),
-    do: raw("<span class=\"hero-wrench-mini inline-block w-4 h-4\"></span>")
-
-  defp tab_label(:activity), do: "Activity"
-  defp tab_label(:tools), do: "Tools"
 
   # ── Data helpers ────────────────────────────────────────────────────
 

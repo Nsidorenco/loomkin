@@ -1,5 +1,5 @@
 defmodule Loomkin.ProjectRules do
-  @moduledoc "Loads and parses LOOMKIN.md project rules files."
+  @moduledoc "Loads and parses LOOMKIN.md project rules files and discovers convention files."
 
   @type rules :: %{
           raw: String.t(),
@@ -9,7 +9,17 @@ defmodule Loomkin.ProjectRules do
           denied_ops: [String.t()]
         }
 
+  @type convention_file :: %{name: String.t(), path: String.t(), content: String.t()}
+
   @candidates ["LOOMKIN.md", ".loomkin.md", "loomkin.md"]
+
+  @convention_files [
+    "AGENTS.md",
+    "CLAUDE.md",
+    "CONTRIBUTING.md",
+    "COPILOT.md",
+    "CURSOR.md"
+  ]
 
   @recognized_sections ["Rules", "Allowed Operations", "Denied Operations"]
 
@@ -175,5 +185,50 @@ defmodule Loomkin.ProjectRules do
           acc
       end
     end)
+  end
+
+  # --- Convention file discovery and loading ---
+
+  @doc """
+  Discover convention files in a project directory.
+
+  Searches for standard convention files (AGENTS.md, CLAUDE.md, CONTRIBUTING.md,
+  COPILOT.md, CURSOR.md) in both the project root and .github/ subdirectory.
+  Returns a list of `%{name: ..., path: ..., content: ...}` maps for each found file.
+  """
+  @spec load_convention_files(String.t()) :: [convention_file()]
+  def load_convention_files(project_path) do
+    search_dirs = [project_path, Path.join(project_path, ".github")]
+
+    for dir <- search_dirs,
+        File.dir?(dir),
+        name <- @convention_files,
+        path = Path.join(dir, name),
+        File.regular?(path),
+        {:ok, content} <- [File.read(path)],
+        content = String.trim(content),
+        content != "",
+        uniq: true do
+      %{name: name, path: path, content: content}
+    end
+    |> Enum.uniq_by(fn %{name: name} -> name end)
+  end
+
+  @doc """
+  Format convention files for system prompt injection.
+
+  Each convention file is wrapped with a header indicating its source.
+  Returns empty string if no convention files are provided.
+  """
+  @spec format_convention_files([convention_file()]) :: String.t()
+  def format_convention_files([]), do: ""
+
+  def format_convention_files(files) do
+    sections =
+      Enum.map(files, fn %{name: name, content: content} ->
+        "## Project Convention: #{name}\n#{content}"
+      end)
+
+    Enum.join(sections, "\n\n")
   end
 end

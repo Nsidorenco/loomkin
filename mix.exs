@@ -3,6 +3,33 @@ defmodule Loomkin.MixProject do
 
   @version "0.1.0"
 
+  # Auto-clean when LOOMKIN_SELF_EDIT changes to avoid confusing
+  # Phoenix code_reloader compile-time mismatch errors.
+  @self_edit_marker Path.join(["_build", to_string(Mix.env()), ".self_edit_mode"])
+  @self_edit_current System.get_env("LOOMKIN_SELF_EDIT") == "1"
+
+  if File.exists?(@self_edit_marker) do
+    previous = File.read!(@self_edit_marker) |> String.trim() == "true"
+
+    if previous != @self_edit_current do
+      mode =
+        if @self_edit_current,
+          do: "self-edit (code reloader off)",
+          else: "normal dev (code reloader on)"
+
+      Mix.shell().info([
+        :yellow,
+        "⚡ LOOMKIN_SELF_EDIT changed → auto-cleaning build for #{mode} mode…"
+      ])
+
+      build_dir = Path.join(["_build", to_string(Mix.env()), "lib", "loomkin"])
+      File.rm_rf!(build_dir)
+    end
+  end
+
+  File.mkdir_p!(Path.join("_build", to_string(Mix.env())))
+  File.write!(@self_edit_marker, to_string(@self_edit_current))
+
   def project do
     [
       app: :loomkin,

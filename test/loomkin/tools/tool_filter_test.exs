@@ -322,9 +322,9 @@ defmodule Loomkin.Tools.ToolFilterTest do
   describe "denial_reason/2" do
     test "provides informative denial message" do
       reason = ToolFilter.denial_reason(:researcher, Loomkin.Tools.FileWrite)
-      assert reason =~ ":write"
-      assert reason =~ ":researcher"
-      assert reason =~ "Allowed categories"
+      assert reason =~ "write"
+      assert reason =~ "researcher"
+      assert reason =~ "peer_message"
     end
   end
 

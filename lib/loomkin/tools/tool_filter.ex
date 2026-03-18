@@ -103,6 +103,12 @@ defmodule Loomkin.Tools.ToolFilter do
     Loomkin.Tools.MergeGraph
   ]
 
+  @backlog_tools [
+    Loomkin.Tools.QueryBacklog,
+    Loomkin.Tools.CreateBacklogItem,
+    Loomkin.Tools.UpdateBacklogItem
+  ]
+
   # -- Tool-to-category mapping (built from the lists above) --
 
   @tool_categories (for {cat, tools} <- [
@@ -110,6 +116,7 @@ defmodule Loomkin.Tools.ToolFilter do
                           # coordination before lead (TeamProgress/TeamComms are coordination tools)
                           coordination: @coordination_tools,
                           consensus: @consensus_tools,
+                          backlog: @backlog_tools,
                           read: @read_tools,
                           write: @write_tools,
                           exec: @exec_tools,
@@ -144,7 +151,8 @@ defmodule Loomkin.Tools.ToolFilter do
       :cross_team,
       :investigation,
       :graph_merge,
-      :consensus
+      :consensus,
+      :backlog
     ],
     concierge: [
       :read,
@@ -157,7 +165,8 @@ defmodule Loomkin.Tools.ToolFilter do
       :cross_team,
       :investigation,
       :graph_merge,
-      :consensus
+      :consensus,
+      :backlog
     ],
     weaver: [:peer, :decision, :coordination, :cross_team, :consensus, :graph_merge]
   }
@@ -270,22 +279,62 @@ defmodule Loomkin.Tools.ToolFilter do
       :cross_team -> @cross_team_tools
       :investigation -> @investigation_tools
       :graph_merge -> @graph_merge_tools
+      :backlog -> @backlog_tools
       _ -> []
     end
   end
 
   @doc """
-  Returns a human-readable description of denied tools for a role.
+  Returns a human-readable description of denied tools for a role,
+  with teamwork-first guidance on how to get the work done.
 
-  Useful for error messages when an agent tries to use a tool
-  outside their role's scope.
+  Instead of just listing categories, the message guides the agent
+  toward asking a teammate for help or requesting a role change.
   """
   @spec denial_reason(atom(), module()) :: String.t()
   def denial_reason(role, tool_module) do
     tool_cat = category(tool_module) || :unknown
-    allowed = categories_for_role(role)
 
-    "Tool category :#{tool_cat} is not allowed for role :#{role}. " <>
-      "Allowed categories: #{inspect(allowed)}"
+    base = "Your role (#{role}) does not include #{tool_cat} tools."
+
+    suggestion = teamwork_suggestion(role, tool_cat)
+
+    base <> " " <> suggestion
+  end
+
+  # Teamwork-first suggestions: guide agents toward collaboration, not workarounds.
+  # Always mention the concierge as fallback escalation point.
+  defp teamwork_suggestion(_role, tool_cat) do
+    case tool_cat do
+      :write ->
+        "Instead of trying workarounds, use peer_message to tell your lead or concierge " <>
+          "what you need written — they'll assign a coder to handle it. " <>
+          "If you know a coder teammate, ask them directly. " <>
+          "Describe WHAT needs to be changed, WHERE (file path + line numbers), and WHY so the coder has full context."
+
+      :exec ->
+        "Use peer_message to ask your lead or concierge to assign a coder or tester to run this. " <>
+          "If you know a coder or tester teammate, ask them directly. " <>
+          "Describe what command you need executed and what output you're looking for."
+
+      :lead ->
+        "Team management tools are reserved for lead/concierge roles. " <>
+          "Use peer_message to ask your lead or concierge to handle team operations. " <>
+          "Describe what you need coordinated and they'll take care of it."
+
+      :investigation ->
+        "Use peer_message to ask the lead or concierge to spawn a researcher for this investigation. " <>
+          "Describe what you need explored and what questions need answering."
+
+      :read ->
+        "Use peer_message to ask a researcher or coder to read this for you. " <>
+          "If you don't know who to ask, message the concierge — they'll route your request. " <>
+          "Describe what information you need and from which files."
+
+      _ ->
+        "Use peer_message to ask your lead or concierge for help — they'll spawn or assign " <>
+          "the right specialist. If you know a teammate with #{tool_cat} capability, ask them directly. " <>
+          "Describe exactly what you need done and why."
+    end
   end
 end

@@ -131,14 +131,25 @@ defmodule Loomkin.Teams.Role do
     timeout_ms: :timer.minutes(5)
   }
 
-  # Legacy tier map — kept only for backward-compatible `model_for_tier/1` calls
-  # and legacy config parsing. New code should use `ModelRouter.default_model/0`.
-  @legacy_tier_models %{
-    grunt: "zai:glm-4.5",
-    standard: "zai:glm-5",
-    expert: "zai:glm-5",
-    architect: "zai:glm-5"
-  }
+  # Legacy tier map — resolved dynamically from user config.
+  # Kept only for backward-compatible `model_for_tier/1` calls.
+  defp legacy_tier_models do
+    default =
+      Loomkin.Config.get(:model, :default) ||
+        Application.get_env(:loomkin, :default_model)
+
+    fast =
+      Loomkin.Config.get(:model, :fast) ||
+        Application.get_env(:loomkin, :weak_model) ||
+        default
+
+    %{
+      grunt: fast,
+      standard: default,
+      expert: default,
+      architect: default
+    }
+  end
 
   # -- Tool groups --
 
@@ -244,7 +255,10 @@ defmodule Loomkin.Teams.Role do
                Loomkin.Tools.GenerateWriteup,
                Loomkin.Tools.MergeGraph,
                Loomkin.Tools.SubAgent,
-               Loomkin.Tools.LspDiagnostics
+               Loomkin.Tools.LspDiagnostics,
+               Loomkin.Tools.QueryBacklog,
+               Loomkin.Tools.CreateBacklogItem,
+               Loomkin.Tools.UpdateBacklogItem
              ] ++ @lead_tools ++ @peer_tools ++ @cross_team_tools
 
   # Orchestrator mode: Lead agents with specialists get this restricted set.
@@ -376,6 +390,33 @@ defmodule Loomkin.Teams.Role do
   - Stop and notify the team via peer_discovery
   - Retrieve the existing work from keepers
   - Focus on what's genuinely new or different
+  """
+
+  @capability_gap_protocol """
+
+  ## Capability Gap Protocol
+  The concierge is always available as your escalation point. If you need a capability you
+  don't have, or you're unsure who to ask, message the concierge — they will spawn the right
+  specialist and connect you with them.
+
+  When you encounter a tool or capability you don't have access to:
+  1. **Don't hack around it.** Never try to simulate a blocked tool (e.g. writing shell commands
+     into a file to "trick" execution). The tool filter exists to maintain role boundaries.
+  2. **Identify who can help.** Use peer_ask_question to broadcast your need, or peer_message
+     a specific teammate:
+     - Need files written/edited? → Ask a **coder**
+     - Need commands/tests run? → Ask a **coder** or **tester**
+     - Need code explored? → Ask a **researcher**
+     - Need code reviewed? → Ask a **reviewer**
+     - Need team coordination? → Ask the **lead** or **concierge**
+     - **Unsure who to ask?** → Message the **concierge** — they'll route it
+  3. **Be specific in your request.** Include exact file paths, line numbers, code snippets,
+     and expected outcomes. The more context you give, the faster your teammate can help.
+  4. **Request a role change if needed.** If you consistently need a capability outside your role,
+     use peer_change_role to request the appropriate tools. This is better than repeatedly
+     asking teammates for simple operations.
+  5. **Never stall.** If you're blocked because you lack a tool, asking for help is ALWAYS
+     the right move. Sitting idle while waiting is better than trying to circumvent role boundaries.
   """
 
   # -- Context Mesh prompt blocks --
@@ -647,6 +688,7 @@ defmodule Loomkin.Teams.Role do
         - `discoveries`: Specific findings as a list of strings (at least 1 required)
         - `actions_taken`: What you actually did (files read, searches run, etc.)
       - If you have nothing concrete to report, YOU ARE NOT DONE. Keep researching.
+        But once you HAVE concrete findings that answer the task's questions — STOP and deliver them.
 
       ## Decision Graph Protocol
       - Log significant findings as observations (node_type: "observation") with parent_id linking to the relevant goal
@@ -672,6 +714,29 @@ defmodule Loomkin.Teams.Role do
 
       Your findings are WORTHLESS if they die with you. Other agents and future sessions
       depend on keepers. If you don't offload, your work is lost.
+
+      ## Capability Gap Protocol
+      If you discover that work needs to be done that's outside your capabilities (writing code,
+      running commands, modifying files), DO NOT try workarounds. Instead:
+      1. Document exactly what needs to be done and why (be specific about files, changes, rationale)
+      2. Use `peer_message` to tell your lead or the concierge what specialist is needed
+      3. Continue your research work — the lead/concierge will spawn the right specialist
+      4. When the new specialist arrives, share your findings with them via `peer_message` so they have full context
+
+      The concierge is always available as your escalation point. If you need a capability you
+      don't have, or you're unsure who to ask, message the concierge — they will spawn the right
+      specialist and connect you with them.
+
+      Your value is in FINDING and UNDERSTANDING — let others handle the implementation.
+
+      ## Completion Discipline
+      Once you have answered all the research questions in your task:
+      1. STOP reading more files — diminishing returns lead to wasted budget
+      2. Immediately share findings via `peer_discovery` and `peer_message` to the lead
+      3. Call `peer_complete_task` with your full findings
+      4. Do NOT keep researching "just to be thorough" — your job is to answer the questions
+         asked, not to become an expert on the entire area. If follow-up research is needed,
+         the lead will spawn another researcher.
 
       ## Team Manifest
       {team_manifest}
@@ -741,6 +806,20 @@ defmodule Loomkin.Teams.Role do
       files_changed (paths modified), decisions_made (choices and rationale), and open_questions
       (unresolved issues). This helps the next agent pick up where you left off.
 
+      ## Capability Gap Protocol
+      If your task requires investigation you can't do yourself (spawning sub-agents, deep
+      codebase exploration beyond what you can read), DO NOT try workarounds. Instead:
+      1. Use `peer_message` to tell your lead or the concierge what you need investigated
+      2. Be specific: what question needs answering, which areas of the codebase, what you've already found
+      3. Continue with the parts of your task you CAN do while waiting
+      4. When findings arrive from the specialist, incorporate them into your implementation
+
+      The concierge is always available as your escalation point. If you need a capability you
+      don't have, or you're unsure who to ask, message the concierge — they will spawn the right
+      specialist and connect you with them.
+
+      Focus on what you do best — writing quality code. Let researchers handle the investigation.
+
       ## Team Manifest
       {team_manifest}
       """
@@ -771,6 +850,17 @@ defmodule Loomkin.Teams.Role do
       - Focus on correctness and safety over style preferences
       - Log review findings using the decision tools
 
+      ## Capability Gap Protocol
+      If your review reveals issues that need code changes or deeper investigation:
+      1. Document the issues clearly with file paths, line numbers, and severity
+      2. Use `peer_message` to tell the lead or the concierge what needs fixing and why
+      3. Do NOT attempt to fix code yourself — you are read-only for good reason
+      4. If a coder is spawned for fixes, share your review findings with them directly via `peer_message`
+
+      The concierge is always available as your escalation point. If you need a capability you
+      don't have, or you're unsure who to ask, message the concierge — they will spawn the right
+      specialist and connect you with them.
+
       ## Team Manifest
       {team_manifest}
       """
@@ -796,6 +886,17 @@ defmodule Loomkin.Teams.Role do
       - Summarize: total tests, passing count, failure count with details
       - If tests fail, analyze the failure output and identify root causes
       - Log test results and coverage observations using decision tools
+
+      ## Capability Gap Protocol
+      If testing reveals bugs that need code changes:
+      1. Document the failure clearly: test name, error output, root cause analysis
+      2. Use `peer_message` to tell the lead or the concierge a coder is needed for fixes
+      3. Do NOT attempt to fix code yourself — focus on identifying and documenting issues
+      4. When a coder makes fixes, re-run the relevant tests and report updated results
+
+      The concierge is always available as your escalation point. If you need a capability you
+      don't have, or you're unsure who to ask, message the concierge — they will spawn the right
+      specialist and connect you with them.
 
       ## Team Manifest
       {team_manifest}
@@ -955,6 +1056,18 @@ defmodule Loomkin.Teams.Role do
       - If assumptions hold: use merge_graph to consolidate speculative work
       - If assumptions violated: alert dependent agents immediately
 
+      ## Capability Gap Protocol
+      If you identify a gap in team capabilities (e.g., no coder for implementation, no researcher
+      for investigation), proactively alert the lead or the concierge via `peer_message`. Include:
+      1. What capability is missing
+      2. Which agent needs it and why
+      3. What context the new specialist would need
+      You are the team's nervous system — detect capability gaps before they block progress.
+
+      The concierge is always available as the escalation point for capability gaps. If you detect
+      a gap and the lead isn't responding, message the concierge — they will spawn the right
+      specialist and connect them with the team.
+
       ## Team Manifest
       {team_manifest}
 
@@ -1021,6 +1134,7 @@ defmodule Loomkin.Teams.Role do
     base_prompt <>
       @shared_behavioral_guidance <>
       @duplicate_prevention_prompt <>
+      @capability_gap_protocol <>
       @conversation_guidance <>
       @peer_communication_prompt <>
       "\n### Peer Communication for Your Role\n" <>
@@ -1046,7 +1160,7 @@ defmodule Loomkin.Teams.Role do
   end
 
   def model_for_tier(tier) when is_atom(tier) do
-    Map.get(@legacy_tier_models, tier, Loomkin.Teams.ModelRouter.default_model())
+    Map.get(legacy_tier_models(), tier, Loomkin.Teams.ModelRouter.default_model())
   end
 
   @doc "List all built-in role names."

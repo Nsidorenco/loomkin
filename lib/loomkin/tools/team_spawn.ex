@@ -97,11 +97,31 @@ defmodule Loomkin.Tools.TeamSpawn do
         {:error, "Failed to create team '#{team_name}': #{inspect(reason)}"}
 
       {:ok, team_id} ->
-        do_spawn_agents(team_id, team_name, purpose, roles, project_path, session_id, model)
+        do_spawn_agents(
+          team_id,
+          team_name,
+          purpose,
+          roles,
+          project_path,
+          session_id,
+          model,
+          agent_name,
+          parent_team_id
+        )
     end
   end
 
-  defp do_spawn_agents(team_id, team_name, purpose, roles, project_path, session_id, model) do
+  defp do_spawn_agents(
+         team_id,
+         team_name,
+         purpose,
+         roles,
+         project_path,
+         session_id,
+         model,
+         requesting_agent,
+         parent_team_id
+       ) do
     require Logger
 
     spawn_opts =
@@ -159,7 +179,14 @@ defmodule Loomkin.Tools.TeamSpawn do
       other_agents = Enum.reject(successful_agents, &(&1.name == spawned_name))
 
       personal_manifest =
-        format_personal_manifest(spawned_name, team_name, purpose, other_agents)
+        format_personal_manifest(
+          spawned_name,
+          team_name,
+          purpose,
+          other_agents,
+          requesting_agent,
+          parent_team_id
+        )
 
       case Manager.find_agent(team_id, spawned_name) do
         {:ok, pid} -> Agent.peer_message(pid, "system", personal_manifest)
@@ -181,6 +208,49 @@ defmodule Loomkin.Tools.TeamSpawn do
 
     {:ok, %{result: String.trim(summary), team_id: team_id}}
   end
+
+  defp format_personal_manifest(
+         my_name,
+         team_name,
+         purpose,
+         teammates,
+         requesting_agent,
+         parent_team_id
+       ) do
+    teammate_lines =
+      teammates
+      |> Enum.map(fn %{name: name, role: role} ->
+        comm_hint = communication_hint(role)
+        "- **#{name}** (#{role})#{comm_hint}"
+      end)
+      |> Enum.join("\n")
+
+    requester_section =
+      if requesting_agent && parent_team_id do
+        """
+
+        **Spawned by:** #{requesting_agent} (in parent team #{parent_team_id}).
+        Report your results back to #{requesting_agent} via cross_team_query or peer_complete_task.
+        If you need clarification on your task, ask #{requesting_agent} directly.
+        """
+      else
+        ""
+      end
+
+    """
+    [Team Briefing] You are #{my_name} in team "#{team_name}".
+    Purpose: #{purpose}
+
+    Your teammates:
+    #{teammate_lines}
+    #{requester_section}
+    Use peer_message to communicate. Check search_keepers for prior context before starting work.
+    """
+  end
+
+  defp communication_hint(:weaver), do: " — your knowledge coordinator, keep them updated"
+  defp communication_hint(:lead), do: " — your team lead"
+  defp communication_hint(_), do: ""
 
   # Resolve a role string to either a built-in role atom or a custom role description.
   # Returns {:built_in, atom} for known roles, {:custom, string} for unknown descriptions.
@@ -240,28 +310,4 @@ defmodule Loomkin.Tools.TeamSpawn do
         nil
     end
   end
-
-  defp format_personal_manifest(my_name, team_name, purpose, teammates) do
-    teammate_lines =
-      teammates
-      |> Enum.map(fn %{name: name, role: role} ->
-        comm_hint = communication_hint(role)
-        "- **#{name}** (#{role})#{comm_hint}"
-      end)
-      |> Enum.join("\n")
-
-    """
-    [Team Briefing] You are #{my_name} in team "#{team_name}".
-    Purpose: #{purpose}
-
-    Your teammates:
-    #{teammate_lines}
-
-    Use peer_message to communicate. Check search_keepers for prior context before starting work.
-    """
-  end
-
-  defp communication_hint(:weaver), do: " — your knowledge coordinator, keep them updated"
-  defp communication_hint(:lead), do: " — your team lead"
-  defp communication_hint(_), do: ""
 end

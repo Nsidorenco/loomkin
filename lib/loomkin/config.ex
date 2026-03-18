@@ -12,10 +12,14 @@ defmodule Loomkin.Config do
 
   @defaults %{
     model: %{
-      default: "zai:glm-5",
+      # Initial default model — overridden by user selection in the UI.
+      # Can also be set via .loomkin.toml: [model] default = "provider:model-name"
+      default: nil,
+      # Fast model for lightweight tasks (conversations, sub-agents).
+      # Overridden by user selection in the UI fast-model dropdown.
+      # nil = inherit from :default.
+      fast: nil,
       # Secondary model for editor tasks — nil means "use the primary model".
-      # Only used when an agent determines a lesser model is acceptable.
-      # Users can set this in .loomkin.toml: [model] editor = "zai:glm-4.5"
       editor: nil
     },
     repo: %{
@@ -305,7 +309,7 @@ defmodule Loomkin.Config do
 
   # Known config keys that may appear in .loomkin.toml
   @known_keys ~w(model permissions context decisions mcp web lsp repo shell channels auth
-    default weak architect editor auto_approve max_repo_map_tokens max_decision_context_tokens
+    default weak fast architect editor auto_approve max_repo_map_tokens max_decision_context_tokens
     reserved_output_tokens enabled enforce_pre_edit auto_log_commits
     allowlist_enabled allowlist
     servers name command args url port server_enabled watch_enabled

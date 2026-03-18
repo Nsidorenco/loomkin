@@ -4129,21 +4129,31 @@ defmodule LoomkinWeb.WorkspaceLive do
         class="fixed bottom-0 left-0 right-0 z-[100] max-h-[40vh] overflow-y-auto bg-zinc-950/95 border-t border-zinc-700 backdrop-blur-sm font-mono text-[11px]"
       >
         <div class="sticky top-0 flex items-center justify-between px-3 py-1.5 bg-zinc-900/90 border-b border-zinc-800">
-          <span class="text-zinc-400 font-semibold uppercase tracking-wider text-[10px]">
-            Signal Log
-          </span>
-          <button phx-click="toggle_debug_panel" class="text-zinc-500 hover:text-zinc-300 text-xs">
-            Close
+          <div class="flex items-center gap-3">
+            <span class="text-zinc-400 font-semibold uppercase tracking-wider text-[10px]">
+              Signal Log
+            </span>
+            <span class="text-zinc-600 text-[10px] tabular-nums">
+              {length(@debug_signals)} events
+            </span>
+          </div>
+          <button phx-click="toggle_debug_panel" class="text-zinc-500 hover:text-zinc-300 text-xs px-2 py-0.5 rounded hover:bg-zinc-800 transition-colors">
+            ✕
           </button>
         </div>
         <div class="px-3 py-1">
           <div
             :for={sig <- @debug_signals}
-            class="flex items-center gap-3 py-0.5 border-b border-zinc-800/50"
+            class="flex items-center gap-3 py-0.5 border-b border-zinc-800/50 hover:bg-zinc-800/30 transition-colors"
           >
             <span class="text-zinc-600 tabular-nums flex-shrink-0">{format_debug_ts(sig.at)}</span>
+            <span
+              class="flex-shrink-0 text-[10px] font-semibold truncate max-w-[80px]"
+              style={"color: #{LoomkinWeb.AgentColors.agent_color(sig.agent)};"}
+            >
+              {sig.agent}
+            </span>
             <span class={debug_signal_color(sig.type)}>{sig.type}</span>
-            <span class="text-zinc-500 truncate">{sig.agent}</span>
           </div>
           <div :if={@debug_signals == []} class="py-4 text-center text-zinc-600">
             No signals captured yet

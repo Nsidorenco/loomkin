@@ -215,12 +215,13 @@ defmodule LoomkinWeb.MissionControlPanelComponent do
         </div>
 
         <%= if @active_tab == :kin do %>
-          <%!-- System agents (weaver etc.) — compact status, no interactive buttons --%>
+          <%!-- System agents (weaver etc.) — compact status with role identity --%>
           <div :if={system_card_names(assigns) != []} class="px-3 pb-2">
             <div
               :for={name <- system_card_names(assigns)}
-              class="flex items-center gap-2 py-1 px-2 rounded bg-surface-1/50"
+              class="flex items-center gap-2 py-1.5 px-2.5 rounded-lg bg-surface-1/50 transition-colors hover:bg-surface-1/80"
             >
+              <span class="text-xs flex-shrink-0">{system_role_icon(name, @agent_cards)}</span>
               <span class={[
                 "w-1.5 h-1.5 rounded-full flex-shrink-0",
                 system_status_dot(@agent_cards[name])
@@ -241,10 +242,13 @@ defmodule LoomkinWeb.MissionControlPanelComponent do
               :if={@concierge_card_names == [] && @worker_card_names == [] && @active_team_id}
               class="flex flex-col items-center justify-center h-full min-h-[320px] text-center px-8"
             >
-              <%!-- Concierge avatar — warm, inviting --%>
+              <%!-- Concierge avatar — warm, inviting with role icon --%>
               <div class="relative mb-6">
-                <div class="w-16 h-16 rounded-2xl bg-surface-2 flex items-center justify-center shadow-md">
-                  <span class="text-2xl font-bold text-brand">C</span>
+                <div
+                  class="w-16 h-16 rounded-2xl flex items-center justify-center shadow-md"
+                  style="background: linear-gradient(135deg, rgba(249, 226, 175, 0.08), rgba(249, 226, 175, 0.02)); border: 1px solid rgba(249, 226, 175, 0.12);"
+                >
+                  <span class="text-2xl">🌟</span>
                 </div>
                 <div class="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-emerald-500/80 flex items-center justify-center">
                   <div class="w-2 h-2 rounded-full bg-emerald-300 animate-pulse" />
@@ -374,13 +378,15 @@ defmodule LoomkinWeb.MissionControlPanelComponent do
                       :for={name <- @idle_workers}
                       phx-click="focus_card_agent"
                       phx-value-agent={name}
-                      class="group w-full flex items-center gap-2.5 px-3 py-2 rounded-lg transition-all duration-150 hover:bg-surface-2/80 cursor-pointer"
+                      class="idle-agent-row group w-full flex items-center gap-2.5 px-3 py-2 rounded-lg transition-all duration-150 hover:bg-surface-2/80 cursor-pointer"
                     >
-                      <%!-- Status dot --%>
-                      <span class={[
-                        "w-2 h-2 rounded-full flex-shrink-0",
-                        idle_dot_class(@agent_cards[name])
-                      ]} />
+                      <%!-- Role icon mini-avatar --%>
+                      <span
+                        class="idle-role-avatar"
+                        style={"background: #{agent_role_accent(name, @agent_cards)}10; border: 1px solid #{agent_role_accent(name, @agent_cards)}12;"}
+                      >
+                        {agent_role_icon(name, @agent_cards)}
+                      </span>
                       <%!-- Name --%>
                       <span
                         class="text-xs font-medium truncate text-secondary group-hover:text-primary transition-colors"
@@ -409,12 +415,12 @@ defmodule LoomkinWeb.MissionControlPanelComponent do
                     </button>
                   </div>
                 <% else %>
-                  <%!-- Collapsed summary: just show dots for each idle agent --%>
+                  <%!-- Collapsed summary: role-tinted dots for each idle agent --%>
                   <div class="flex items-center gap-1.5 px-3 py-1">
                     <span
                       :for={name <- @idle_workers}
-                      class="w-2 h-2 rounded-full cursor-pointer transition-all duration-150 hover:scale-150"
-                      style={"background: #{LoomkinWeb.AgentColors.agent_color(name)}40;"}
+                      class="w-2.5 h-2.5 rounded-md cursor-pointer transition-all duration-150 hover:scale-150"
+                      style={"background: #{agent_role_accent(name, @agent_cards)}25;"}
                       phx-click="focus_card_agent"
                       phx-value-agent={name}
                       title={name}
@@ -596,17 +602,6 @@ defmodule LoomkinWeb.MissionControlPanelComponent do
     end)
   end
 
-  defp idle_dot_class(nil), do: "bg-zinc-600"
-
-  defp idle_dot_class(card) do
-    case card.status do
-      :paused -> "bg-blue-400/60"
-      :error -> "bg-red-400/60"
-      :complete -> "bg-emerald-400/60"
-      _ -> "bg-zinc-500/60"
-    end
-  end
-
   defp role_matches_name?(role, name) when is_atom(role) do
     to_string(role) == name
   end
@@ -660,4 +655,67 @@ defmodule LoomkinWeb.MissionControlPanelComponent do
   end
 
   defp format_system_name(name), do: to_string(name)
+
+  @system_role_icons %{
+    "lead" => "👑",
+    "concierge" => "🌟",
+    "researcher" => "🔬",
+    "coder" => "⚡",
+    "reviewer" => "🔍",
+    "tester" => "🧪",
+    "weaver" => "🕸"
+  }
+
+  @role_accents %{
+    "lead" => "#cba6f7",
+    "concierge" => "#f9e2af",
+    "researcher" => "#89dceb",
+    "coder" => "#a6e3a1",
+    "reviewer" => "#fab387",
+    "tester" => "#f38ba8",
+    "weaver" => "#94e2d5"
+  }
+
+  @default_accent "#a1a1aa"
+
+  # System agent role icon lookup — maps agent name to its card's role icon
+  defp system_role_icon(name, agent_cards) do
+    case agent_cards[name] do
+      nil -> "◆"
+      %{role: role} -> role_to_icon(role)
+      _ -> "◆"
+    end
+  end
+
+  # Agent role icon lookup — for idle agents list
+  defp agent_role_icon(name, agent_cards) do
+    case agent_cards[name] do
+      nil -> "◆"
+      %{role: role} -> role_to_icon(role)
+      _ -> "◆"
+    end
+  end
+
+  # Agent role accent color lookup — for idle agent styling
+  defp agent_role_accent(name, agent_cards) do
+    case agent_cards[name] do
+      nil -> @default_accent
+      %{role: role} -> role_to_accent(role)
+      _ -> @default_accent
+    end
+  end
+
+  defp role_to_icon(role) when is_atom(role) or is_binary(role) do
+    base = role |> to_string() |> String.downcase() |> String.split([" ", "-", "_"]) |> List.first()
+    Map.get(@system_role_icons, base, "◆")
+  end
+
+  defp role_to_icon(_), do: "◆"
+
+  defp role_to_accent(role) when is_atom(role) or is_binary(role) do
+    base = role |> to_string() |> String.downcase() |> String.split([" ", "-", "_"]) |> List.first()
+    Map.get(@role_accents, base, @default_accent)
+  end
+
+  defp role_to_accent(_), do: @default_accent
 end

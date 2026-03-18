@@ -9,8 +9,8 @@ defmodule LoomkinWeb.AgentCommsComponent do
 
   use Phoenix.Component
 
-  alias Phoenix.LiveView.JS
   alias LoomkinWeb.AgentColors
+  alias Phoenix.LiveView.JS
 
   @type_config %{
     message: %{
@@ -326,10 +326,11 @@ defmodule LoomkinWeb.AgentCommsComponent do
   attr :event_count, :integer, default: 0
   attr :id, :string, default: "agent-comms"
   attr :root_team_id, :string, default: nil
+  attr :comms_filter, :atom, default: :all
 
   def comms_feed(assigns) do
     ~H"""
-    <div id={@id} class="flex flex-col h-full relative">
+    <div id={@id} class="flex flex-col h-full relative" data-comms-filter={@comms_filter}>
       <%!-- Section header --%>
       <div class="px-4 py-2.5 flex items-center gap-2">
         <span class="text-[10px] font-semibold text-muted/70 uppercase tracking-[0.15em]">
@@ -356,7 +357,11 @@ defmodule LoomkinWeb.AgentCommsComponent do
           No inter-agent communication yet
         </div>
 
-        <div :for={{dom_id, event} <- @stream} id={dom_id}>
+        <div
+          :for={{dom_id, event} <- @stream}
+          id={dom_id}
+          data-comms-category={comms_category(event.type)}
+        >
           <.comms_row event={event} root_team_id={@root_team_id} />
         </div>
       </div>
@@ -654,4 +659,33 @@ defmodule LoomkinWeb.AgentCommsComponent do
   end
 
   defp short_team_label(_), do: ""
+
+  # Map event types to filter categories
+  defp comms_category(type)
+       when type in [:task_created, :task_assigned, :task_complete, :tasks_unblocked],
+       do: "tasks"
+
+  defp comms_category(type)
+       when type in [
+              :error,
+              :agent_crashed,
+              :agent_permanently_failed,
+              :agent_force_paused
+            ],
+       do: "errors"
+
+  defp comms_category(type)
+       when type in [
+              :decision,
+              :discovery,
+              :escalation,
+              :approval_gate_requested,
+              :approval_gate_resolved,
+              :permission_requested,
+              :human_broadcast,
+              :human_reply
+            ],
+       do: "important"
+
+  defp comms_category(_), do: "other"
 end

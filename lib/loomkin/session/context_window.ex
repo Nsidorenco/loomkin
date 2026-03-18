@@ -114,18 +114,34 @@ defmodule Loomkin.Session.ContextWindow do
   def inject_project_rules(system_parts, project_path) do
     if Code.ensure_loaded?(Loomkin.ProjectRules) &&
          function_exported?(Loomkin.ProjectRules, :load, 1) do
-      case Loomkin.ProjectRules.load(project_path) do
-        {:ok, rules} ->
-          formatted = Loomkin.ProjectRules.format_for_prompt(rules)
+      # Load structured LOOMKIN.md rules
+      system_parts =
+        case Loomkin.ProjectRules.load(project_path) do
+          {:ok, rules} ->
+            formatted = Loomkin.ProjectRules.format_for_prompt(rules)
 
-          if formatted != "" do
-            system_parts ++ [formatted]
-          else
+            if formatted != "" do
+              system_parts ++ [formatted]
+            else
+              system_parts
+            end
+
+          _ ->
             system_parts
-          end
+        end
 
-        _ ->
+      # Load convention files (AGENTS.md, CLAUDE.md, CONTRIBUTING.md, etc.)
+      if function_exported?(Loomkin.ProjectRules, :load_convention_files, 1) do
+        convention_files = Loomkin.ProjectRules.load_convention_files(project_path)
+        formatted = Loomkin.ProjectRules.format_convention_files(convention_files)
+
+        if formatted != "" do
+          system_parts ++ [formatted]
+        else
           system_parts
+        end
+      else
+        system_parts
       end
     else
       system_parts

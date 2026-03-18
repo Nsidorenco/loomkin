@@ -103,11 +103,12 @@ defmodule LoomkinWeb.ComposerComponent do
           <span class="text-amber-400/30 ml-0.5">({@agent_count})</span>
         </div>
 
-        <%!-- Reply indicator --%>
+        <%!-- Reply indicator with role icon --%>
         <div
           :if={@reply_target}
           class="flex items-center gap-2 mb-3 px-3 py-1.5 rounded-xl animate-fade-in bg-brand-subtle/40"
         >
+          <span class="text-sm">{role_icon_for(@reply_target.agent, @agent_cards)}</span>
           <span class="inline-flex items-center px-1.5 py-px rounded-md text-[10px] font-semibold bg-brand/15 text-brand">
             {@reply_target.agent}
           </span>
@@ -191,15 +192,14 @@ defmodule LoomkinWeb.ComposerComponent do
                     @reply_target && @reply_target.agent == agent.name && "bg-surface-3/20"
                   ]}
                 >
-                  <span class={[
-                    "w-1.5 h-1.5 rounded-full flex-shrink-0",
-                    agent_picker_dot_class(agent[:status])
-                  ]} />
+                  <span class="text-sm flex-shrink-0">
+                    {LoomkinWeb.AgentColors.role_icon(agent[:role])}
+                  </span>
                   <span class="truncate" style={"color: #{agent_color(agent.name)};"}>
                     {agent.name}
                   </span>
                   <span class="ml-auto text-[10px] text-muted/60">
-                    {agent[:role] || agent[:status]}
+                    {format_role_label(agent[:role]) || agent[:status]}
                   </span>
                 </button>
               </div>
@@ -380,6 +380,22 @@ defmodule LoomkinWeb.ComposerComponent do
   defp agent_picker_dot_class(_), do: "bg-gray-400"
 
   defp agent_color(name), do: LoomkinWeb.AgentColors.agent_color(name)
+
+  defp role_icon_for(agent_name, agent_cards) when is_map(agent_cards) do
+    case Map.get(agent_cards, agent_name) do
+      %{role: role} -> LoomkinWeb.AgentColors.role_icon(role)
+      _ -> "◆"
+    end
+  end
+
+  defp role_icon_for(_, _), do: "◆"
+
+  defp format_role_label(nil), do: nil
+  defp format_role_label(role) when is_atom(role), do: format_role_label(to_string(role))
+
+  defp format_role_label(role) when is_binary(role) do
+    role |> String.replace("_", " ") |> String.capitalize()
+  end
 
   defp agent_is_working?(agent_cards, agent_name) do
     case Map.get(agent_cards, agent_name) do

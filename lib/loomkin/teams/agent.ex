@@ -2897,6 +2897,10 @@ defmodule Loomkin.Teams.Agent do
     # Kin agent customization: append user-defined extra instructions if present.
     system_prompt = maybe_inject_system_prompt_extra(system_prompt, state)
 
+    # Project conventions: inject AGENTS.md, CONTRIBUTING.md, etc. so agents
+    # respect project-level rules (commit format, code style, etc.)
+    system_prompt = maybe_inject_project_conventions(system_prompt, state.project_path)
+
     # A resolver fn allows AgentLoop to read the latest project_path from
     # team ETS at every tool call, even when the Task captured stale opts.
     project_path_resolver = fn -> resolve_project_path(team_id, state.project_path) end
@@ -3054,6 +3058,41 @@ defmodule Loomkin.Teams.Agent do
       _ ->
         system_prompt
     end
+  end
+
+  defp maybe_inject_project_conventions(system_prompt, nil), do: system_prompt
+
+  defp maybe_inject_project_conventions(system_prompt, project_path) do
+    # Load structured LOOMKIN.md rules
+    system_prompt =
+      case Loomkin.ProjectRules.load(project_path) do
+        {:ok, rules} ->
+          formatted = Loomkin.ProjectRules.format_for_prompt(rules)
+          if formatted != "", do: system_prompt <> "\n\n" <> formatted, else: system_prompt
+
+        _ ->
+          system_prompt
+      end
+
+    # Load convention files (AGENTS.md, CLAUDE.md, CONTRIBUTING.md, etc.)
+    convention_files = Loomkin.ProjectRules.load_convention_files(project_path)
+    formatted = Loomkin.ProjectRules.format_convention_files(convention_files)
+
+    if formatted != "" do
+      # Cap at ~4000 chars to avoid bloating the system prompt
+      truncated =
+        if String.length(formatted) > 4000 do
+          String.slice(formatted, 0, 4000) <> "\n\n[... convention file content truncated]"
+        else
+          formatted
+        end
+
+      system_prompt <> "\n\n" <> truncated
+    else
+      system_prompt
+    end
+  rescue
+    _e -> system_prompt
   end
 
   @non_specialist_roles [:lead, :concierge, :orienter, "lead", "concierge", "orienter"]

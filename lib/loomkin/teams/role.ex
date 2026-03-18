@@ -876,6 +876,17 @@ defmodule Loomkin.Teams.Role do
       - Check decision_query (type: "active_goals") before delegating to see existing context
       - When an approach fails, use pivot_decision to record the learning and new direction
 
+      ## Persistent Backlog
+      You have access to a DB-backed backlog system that survives restarts. Use it as the
+      source of truth for planned work, instead of (or in addition to) the decision graph.
+      - **query_backlog**: Check what work is planned. Use query_type "actionable" to see
+        what needs doing, "summary" for counts, "by_epic" for roadmap view, "search" to find items.
+      - **create_backlog_item**: Add new work items with title, description, priority (1-5),
+        category, epic, tags, and scope_estimate (quick/session/campaign).
+      - **update_backlog_item**: Update status (todo → in_progress → done), reprioritize,
+        assign to agents/teams, or add results when work completes.
+      At session start, check the backlog with query_backlog to orient yourself on planned work.
+
       ## Weaver Delegation
       If a Weaver agent exists in the team, delegate knowledge routing to them:
       - Don't manually relay findings between agents — the Weaver handles that

@@ -17,7 +17,6 @@ defmodule LoomkinWeb.WorkspaceLive do
       |> assign(
         messages: [],
         status: :idle,
-        active_tab: :files,
         model: Loomkin.Teams.ModelRouter.default_model(),
         input_text: "",
         current_tool: nil,
@@ -51,7 +50,6 @@ defmodule LoomkinWeb.WorkspaceLive do
         worker_card_names: [],
         comms_event_count: 0,
         roster_refresh_timer: nil,
-        mode: :mission_control,
         focused_agent: nil,
         inspector_mode: :auto_follow,
         collapsed_inspector: false,
@@ -239,7 +237,6 @@ defmodule LoomkinWeb.WorkspaceLive do
         |> assign(
           team_id: team_id_from_session,
           active_team_id: team_id_from_session,
-          mode: :mission_control,
           channel_bindings: bindings,
           broadcast_mode: true
         )
@@ -615,23 +612,18 @@ defmodule LoomkinWeb.WorkspaceLive do
 
           user_msg = %{role: :user, content: trimmed}
 
-          socket =
-            if socket.assigns.mode == :mission_control do
-              user_event = %{
-                id: Ecto.UUID.generate(),
-                type: :message,
-                agent: "You",
-                content: trimmed,
-                timestamp: DateTime.utc_now(),
-                expanded: false,
-                metadata: %{from: "You", to: "Kin"}
-              }
+          # Push user message to activity feed
+          user_event = %{
+            id: Ecto.UUID.generate(),
+            type: :message,
+            agent: "You",
+            content: trimmed,
+            timestamp: DateTime.utc_now(),
+            expanded: false,
+            metadata: %{from: "You", to: "Kin"}
+          }
 
-              socket
-              |> push_activity_event(user_event)
-            else
-              socket
-            end
+          socket = push_activity_event(socket, user_event)
 
           # Append preserves chronological order required by ChatComponent stream diffing
           updated_messages = Enum.take(socket.assigns.messages ++ [user_msg], -@max_messages)
@@ -715,12 +707,6 @@ defmodule LoomkinWeb.WorkspaceLive do
         send(self(), {:spawn_kin_agent, kin})
         {:noreply, socket}
     end
-  end
-
-  @valid_tabs ~w(files diff graph context)
-  def handle_event("switch_tab", %{"tab" => tab}, socket) when tab in @valid_tabs do
-    tab_atom = String.to_existing_atom(tab)
-    {:noreply, assign(socket, active_tab: tab_atom)}
   end
 
   def handle_event("change_model", %{"model" => model}, socket) do
@@ -875,16 +861,9 @@ defmodule LoomkinWeb.WorkspaceLive do
     end
   end
 
-  def handle_event("toggle_mode", _, socket) do
-    new_mode = if socket.assigns.mode == :solo, do: :mission_control, else: :solo
-    {:noreply, assign(socket, mode: new_mode)}
-  end
-
   def handle_event("restore_ui_state", params, socket) do
     socket =
       socket
-      |> restore_assign(:mode, params["mode"], ~w(solo mission_control))
-      |> restore_assign(:active_tab, params["active_tab"], @valid_tabs)
       |> restore_assign(:inspector_mode, params["inspector_mode"], ~w(auto_follow pinned))
       |> restore_assign_bool(:collapsed_inspector, params["collapsed_inspector"])
       |> restore_assign_string(:focused_agent, params["focused_agent"])
@@ -905,7 +884,8 @@ defmodule LoomkinWeb.WorkspaceLive do
   end
 
   def handle_event("keyboard_shortcut", %{"key" => "toggle_mode"}, socket) do
-    handle_event("toggle_mode", %{}, socket)
+    # Mode toggle removed — always mission_control
+    {:noreply, socket}
   end
 
   def handle_event("keyboard_shortcut", %{"key" => "cancel"}, socket) do
@@ -2224,7 +2204,6 @@ defmodule LoomkinWeb.WorkspaceLive do
       |> assign(
         team_id: team_id,
         active_team_id: team_id,
-        mode: :mission_control,
         channel_bindings: bindings,
         scheduled_messages: scheduled
       )
@@ -2254,7 +2233,7 @@ defmodule LoomkinWeb.WorkspaceLive do
 
     socket =
       socket
-      |> assign(team_tree: updated_tree, mode: :mission_control)
+      |> assign(team_tree: updated_tree)
       |> schedule_roster_refresh()
 
     {:noreply, socket}
@@ -2811,8 +2790,6 @@ defmodule LoomkinWeb.WorkspaceLive do
          team_tree: %{},
          team_names: %{},
          active_team_id: nil,
-         active_tab: :files,
-         mode: :solo,
          focused_agent: nil,
          inspector_mode: :auto_follow,
          subscribed_teams: MapSet.new()
@@ -2843,12 +2820,6 @@ defmodule LoomkinWeb.WorkspaceLive do
           do: socket.assigns.team_id,
           else: socket.assigns.active_team_id
 
-      # Switch back to solo if no teams remain
-      mode =
-        if updated_tree == %{} && socket.assigns.team_id == nil,
-          do: :solo,
-          else: socket.assigns.mode
-
       updated_subscribed =
         MapSet.difference(
           socket.assigns[:subscribed_teams] || MapSet.new(),
@@ -2860,7 +2831,6 @@ defmodule LoomkinWeb.WorkspaceLive do
          team_tree: updated_tree,
          team_names: updated_names,
          active_team_id: active_team_id,
-         mode: mode,
          subscribed_teams: updated_subscribed
        )}
     end
@@ -2996,19 +2966,16 @@ defmodule LoomkinWeb.WorkspaceLive do
     end
   end
 
-  # Team decision and context events — refresh graph + buffer for activity feed + comms
+  # Team decision and context events — forward to activity feed + comms
   def handle_info({:decision_logged, _node_id, _agent_name} = event, socket) do
-    refresh_decision_graphs(socket)
     {:noreply, socket |> forward_to_activity(event) |> forward_to_cards_and_comms(event)}
   end
 
   def handle_info({:node_added, _node} = event, socket) do
-    refresh_decision_graphs(socket)
     {:noreply, socket |> forward_to_activity(event) |> forward_to_cards_and_comms(event)}
   end
 
   def handle_info({:pivot_created, _result} = event, socket) do
-    refresh_decision_graphs(socket)
     {:noreply, socket |> forward_to_activity(event) |> forward_to_cards_and_comms(event)}
   end
 
@@ -3284,8 +3251,8 @@ defmodule LoomkinWeb.WorkspaceLive do
   end
 
   def handle_info({:command_palette_action, "action", "toggle_mode"}, socket) do
-    new_mode = if socket.assigns.mode == :solo, do: :mission_control, else: :solo
-    {:noreply, assign(socket, mode: new_mode)}
+    # Mode toggle removed — always mission_control
+    {:noreply, socket}
   end
 
   def handle_info({:command_palette_action, "action", "switch_project"}, socket) do
@@ -3353,31 +3320,6 @@ defmodule LoomkinWeb.WorkspaceLive do
   end
 
   def handle_info({:composer_event, _event, _params}, socket) do
-    {:noreply, socket}
-  end
-
-  # Sidebar events forwarded from SidebarPanelComponent
-  def handle_info({:sidebar_event, "switch_tab", %{"tab" => tab}}, socket) do
-    handle_event("switch_tab", %{"tab" => tab}, socket)
-  end
-
-  def handle_info({:sidebar_event, "deselect_file", _params}, socket) do
-    {:noreply, assign(socket, selected_file: nil, file_content: nil)}
-  end
-
-  def handle_info({:sidebar_event, "edit_explorer_path", _params}, socket) do
-    {:noreply, assign(socket, editing_explorer_path: true)}
-  end
-
-  def handle_info({:sidebar_event, "cancel_edit_explorer", _params}, socket) do
-    {:noreply, assign(socket, editing_explorer_path: false)}
-  end
-
-  def handle_info({:sidebar_event, "set_explorer_path", params}, socket) do
-    handle_event("set_explorer_path", params, socket)
-  end
-
-  def handle_info({:sidebar_event, _event, _params}, socket) do
     {:noreply, socket}
   end
 
@@ -3594,8 +3536,6 @@ defmodule LoomkinWeb.WorkspaceLive do
       id="workspace-state"
       phx-hook="WorkspaceState"
       data-session-id={@session_id}
-      data-mode={@mode}
-      data-active-tab={@active_tab}
       data-focused-agent={@focused_agent}
       data-inspector-mode={@inspector_mode}
       data-collapsed-inspector={to_string(@collapsed_inspector)}
@@ -3778,9 +3718,9 @@ defmodule LoomkinWeb.WorkspaceLive do
               class="hidden md:flex"
             />
 
-            <%!-- Team indicator (mission control mode) --%>
+            <%!-- Team indicator --%>
             <div
-              :if={@mode == :mission_control && @active_team_id}
+              :if={@active_team_id}
               class="hidden md:flex items-center gap-1.5 ml-1"
             >
               <div class="flex items-center gap-1 px-2 py-0.5 rounded-md bg-brand-subtle/60">
@@ -3955,7 +3895,6 @@ defmodule LoomkinWeb.WorkspaceLive do
 
         <%!-- Session history toggle --%>
         <button
-          :if={@mode == :mission_control}
           phx-click="toggle_session_history"
           class={[
             "flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] transition-colors",
@@ -3993,17 +3932,134 @@ defmodule LoomkinWeb.WorkspaceLive do
         </button>
       </div>
 
-      <%!-- ── Main Content — branches on mode ── --%>
+      <%!-- ── Main Content — Mission Control layout ── --%>
       <div id="main-content" class="flex flex-1 min-h-0 flex-col xl:flex-row">
-        <%= if @mode == :solo do %>
-          <%!-- Left: Chat + Input --%>
-          <div class="flex-1 flex flex-col min-w-0 min-h-0 bg-surface-0">
+        <%!-- Left: Kin Cards + Comms (full height) + Composer --%>
+        <div
+          id="mc-main-container"
+          class="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden"
+        >
+          <%!-- Kin cards + comms fill all available space --%>
+          <div class="flex-1 overflow-hidden flex flex-col min-h-0">
             <.live_component
-              module={LoomkinWeb.SessionSwitcherComponent}
-              id="session-switcher"
-              session_id={@session_id}
-              project_path={@project_path}
+              module={LoomkinWeb.MissionControlPanelComponent}
+              id="mission-control-panel"
+              agent_cards={@agent_cards}
+              concierge_card_names={@concierge_card_names}
+              system_card_names={@system_card_names}
+              worker_card_names={@worker_card_names}
+              comms_event_count={@comms_event_count}
+              comms_stream={@streams.comms_events}
+              focused_agent={@focused_agent}
+              inspector_mode={@inspector_mode}
+              kin_agents={@kin_agents}
+              cached_agents={@cached_agents}
+              active_team_id={@active_team_id}
+              leader_approval_pending={@leader_approval_pending}
+              collab_health={@collab_health}
             />
+          </div>
+
+          <%!-- Pending ask_user questions --%>
+          <div
+            :if={@pending_questions != []}
+            class="flex-shrink-0 px-4 py-2.5 bg-violet-950/20"
+          >
+            <.live_component
+              module={LoomkinWeb.AskUserComponent}
+              id="ask-user-questions-mc"
+              questions={@pending_questions}
+            />
+          </div>
+
+          <%!-- Composer with session history toggle --%>
+          <.live_component
+            module={LoomkinWeb.ComposerComponent}
+            id="composer"
+            input_text={@input_text}
+            reply_target={Map.get(assigns, :reply_target)}
+            cached_agents={@cached_agents}
+            last_user_message={@last_user_message}
+            queue_drawer={@queue_drawer}
+            scheduled_messages={@scheduled_messages}
+            agent_queues={@agent_queues}
+            active_team_id={@active_team_id}
+            session_id={@session_id}
+            status={@status}
+            agent_cards={@agent_cards}
+            broadcast_mode={@broadcast_mode}
+            agent_count={length(@cached_agents)}
+          />
+
+          <%!-- Queue drawer overlay --%>
+          <.live_component
+            :if={@queue_drawer}
+            module={LoomkinWeb.MessageQueueComponent}
+            id={"queue-drawer-#{@queue_drawer.agent}"}
+            queue={Map.get(@agent_queues, @queue_drawer.agent, [])}
+            agent_name={@queue_drawer.agent}
+            team_id={@queue_drawer.team_id}
+          />
+        </div>
+
+        <%!-- Session History Modal --%>
+        <div
+          :if={@show_session_history}
+          id="session-history-modal"
+          class="fixed inset-0 z-50 flex items-center justify-center"
+        >
+          <div
+            class="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            phx-click="toggle_session_history"
+            aria-hidden="true"
+          />
+          <div class="relative z-10 glass rounded-2xl w-full max-w-3xl h-[75vh] flex flex-col overflow-hidden animate-fade-in">
+            <div class="flex items-center justify-between px-4 py-3 border-b border-border-subtle">
+              <div class="flex items-center gap-2">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  class="h-4 w-4 text-violet-400"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
+                </svg>
+                <h2 class="text-sm font-semibold text-white">Session History</h2>
+              </div>
+              <div class="flex items-center gap-2">
+                <button
+                  :if={
+                    @multi_tenant && @current_scope && @current_scope.user &&
+                      @session_id
+                  }
+                  phx-click="open_save_chat_modal"
+                  class="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs text-zinc-400 hover:text-white hover:bg-surface-2 transition-colors"
+                  title="Save chat as snippet"
+                >
+                  <.icon name="hero-bookmark-mini" class="w-3.5 h-3.5" /> Save
+                </button>
+                <button
+                  phx-click="toggle_session_history"
+                  class="text-zinc-500 hover:text-zinc-300 text-xs"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+            <div class="px-4 py-2 border-b border-border-subtle bg-surface-1/50">
+              <.live_component
+                module={LoomkinWeb.SessionSwitcherComponent}
+                id="session-switcher"
+                session_id={@session_id}
+                project_path={@project_path}
+              />
+            </div>
             <div class="flex-1 overflow-auto min-h-0">
               <.live_component
                 module={LoomkinWeb.ChatComponent}
@@ -4021,208 +4077,19 @@ defmodule LoomkinWeb.WorkspaceLive do
                 context_info={@context_info}
               />
             </div>
-
-            <%!-- Pending ask_user questions (also shown in solo mode) --%>
-            <div
-              :if={@pending_questions != []}
-              class="flex-shrink-0 px-4 py-2.5 bg-violet-950/20"
-            >
-              <.live_component
-                module={LoomkinWeb.AskUserComponent}
-                id="ask-user-questions-solo"
-                questions={@pending_questions}
-              />
-            </div>
-
-            <.live_component
-              module={LoomkinWeb.ComposerComponent}
-              id="composer"
-              input_text={@input_text}
-              reply_target={Map.get(assigns, :reply_target)}
-              cached_agents={@cached_agents}
-              last_user_message={@last_user_message}
-              queue_drawer={@queue_drawer}
-              scheduled_messages={@scheduled_messages}
-              agent_queues={@agent_queues}
-              active_team_id={@active_team_id}
-              session_id={@session_id}
-              status={@status}
-              agent_cards={@agent_cards}
-            />
           </div>
+        </div>
 
-          <%!-- Right: Sidebar --%>
-          <.live_component
-            module={LoomkinWeb.SidebarPanelComponent}
-            id="sidebar-panel"
-            active_tab={@active_tab}
-            selected_file={@selected_file}
-            file_content={@file_content}
-            diffs={@diffs}
-            file_tree_version={@file_tree_version}
-            session_id={@session_id}
-            active_team_id={@active_team_id}
-            explorer_path={@explorer_path || @project_path}
-            project_path={@project_path}
-          />
-        <% else %>
-          <%!-- Mission Control Left: Kin Cards + Comms (full height) + Composer --%>
-          <div
-            id="mc-main-container"
-            class="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden"
-          >
-            <%!-- Kin cards + comms fill all available space --%>
-            <div class="flex-1 overflow-hidden flex flex-col min-h-0">
-              <.live_component
-                module={LoomkinWeb.MissionControlPanelComponent}
-                id="mission-control-panel"
-                agent_cards={@agent_cards}
-                concierge_card_names={@concierge_card_names}
-                system_card_names={@system_card_names}
-                worker_card_names={@worker_card_names}
-                comms_event_count={@comms_event_count}
-                comms_stream={@streams.comms_events}
-                focused_agent={@focused_agent}
-                inspector_mode={@inspector_mode}
-                kin_agents={@kin_agents}
-                cached_agents={@cached_agents}
-                active_team_id={@active_team_id}
-                leader_approval_pending={@leader_approval_pending}
-                collab_health={@collab_health}
-              />
-            </div>
-
-            <%!-- Pending ask_user questions --%>
-            <div
-              :if={@pending_questions != []}
-              class="flex-shrink-0 px-4 py-2.5 bg-violet-950/20"
-            >
-              <.live_component
-                module={LoomkinWeb.AskUserComponent}
-                id="ask-user-questions-mc"
-                questions={@pending_questions}
-              />
-            </div>
-
-            <%!-- Composer with session history toggle --%>
-            <.live_component
-              module={LoomkinWeb.ComposerComponent}
-              id="composer"
-              input_text={@input_text}
-              reply_target={Map.get(assigns, :reply_target)}
-              cached_agents={@cached_agents}
-              last_user_message={@last_user_message}
-              queue_drawer={@queue_drawer}
-              scheduled_messages={@scheduled_messages}
-              agent_queues={@agent_queues}
-              active_team_id={@active_team_id}
-              session_id={@session_id}
-              status={@status}
-              agent_cards={@agent_cards}
-              broadcast_mode={@broadcast_mode}
-              agent_count={length(@cached_agents)}
-            />
-
-            <%!-- Queue drawer overlay --%>
-            <.live_component
-              :if={@queue_drawer}
-              module={LoomkinWeb.MessageQueueComponent}
-              id={"queue-drawer-#{@queue_drawer.agent}"}
-              queue={Map.get(@agent_queues, @queue_drawer.agent, [])}
-              agent_name={@queue_drawer.agent}
-              team_id={@queue_drawer.team_id}
-            />
-          </div>
-
-          <%!-- Session History Modal --%>
-          <div
-            :if={@show_session_history}
-            id="session-history-modal"
-            class="fixed inset-0 z-50 flex items-center justify-center"
-          >
-            <div
-              class="absolute inset-0 bg-black/60 backdrop-blur-sm"
-              phx-click="toggle_session_history"
-              aria-hidden="true"
-            />
-            <div class="relative z-10 glass rounded-2xl w-full max-w-3xl h-[75vh] flex flex-col overflow-hidden animate-fade-in">
-              <div class="flex items-center justify-between px-4 py-3 border-b border-border-subtle">
-                <div class="flex items-center gap-2">
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    class="h-4 w-4 text-violet-400"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                      d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-                    />
-                  </svg>
-                  <h2 class="text-sm font-semibold text-white">Session History</h2>
-                </div>
-                <div class="flex items-center gap-2">
-                  <button
-                    :if={
-                      @multi_tenant && @current_scope && @current_scope.user &&
-                        @session_id
-                    }
-                    phx-click="open_save_chat_modal"
-                    class="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs text-zinc-400 hover:text-white hover:bg-surface-2 transition-colors"
-                    title="Save chat as snippet"
-                  >
-                    <.icon name="hero-bookmark-mini" class="w-3.5 h-3.5" /> Save
-                  </button>
-                  <button
-                    phx-click="toggle_session_history"
-                    class="text-zinc-500 hover:text-zinc-300 text-xs"
-                  >
-                    Close
-                  </button>
-                </div>
-              </div>
-              <div class="px-4 py-2 border-b border-border-subtle bg-surface-1/50">
-                <.live_component
-                  module={LoomkinWeb.SessionSwitcherComponent}
-                  id="session-switcher"
-                  session_id={@session_id}
-                  project_path={@project_path}
-                />
-              </div>
-              <div class="flex-1 overflow-auto min-h-0">
-                <.live_component
-                  module={LoomkinWeb.ChatComponent}
-                  id="chat"
-                  messages={@messages}
-                  status={@status}
-                  current_tool={@current_tool}
-                  streaming={@streaming}
-                  streaming_content={@streaming_content}
-                  streaming_agent={@streaming_agent}
-                  architect_phase={@architect_phase}
-                  plan_steps={@plan_steps}
-                  current_step={@current_step}
-                  failed_message_idx={@failed_message_idx}
-                  context_info={@context_info}
-                />
-              </div>
-            </div>
-          </div>
-
-          <%!-- Right: Agent Deep-Focus Panel (w-80, collapsible) --%>
-          <.live_component
-            module={LoomkinWeb.ContextInspectorComponent}
-            id="context-inspector"
-            focused_agent={@focused_agent}
-            focused_card={if(@focused_agent, do: Map.get(@agent_cards, @focused_agent))}
-            inspector_mode={@inspector_mode}
-            session_id={@session_id}
-            team_id={@active_team_id}
-          />
-        <% end %>
+        <%!-- Right: Agent Deep-Focus Panel (w-80, collapsible) --%>
+        <.live_component
+          module={LoomkinWeb.ContextInspectorComponent}
+          id="context-inspector"
+          focused_agent={@focused_agent}
+          focused_card={if(@focused_agent, do: Map.get(@agent_cards, @focused_agent))}
+          inspector_mode={@inspector_mode}
+          session_id={@session_id}
+          team_id={@active_team_id}
+        />
 
         <%!-- Social Side Panel (deployed mode only) --%>
         <LoomkinWeb.SocialPanelComponent.social_panel
@@ -4262,21 +4129,34 @@ defmodule LoomkinWeb.WorkspaceLive do
         class="fixed bottom-0 left-0 right-0 z-[100] max-h-[40vh] overflow-y-auto bg-zinc-950/95 border-t border-zinc-700 backdrop-blur-sm font-mono text-[11px]"
       >
         <div class="sticky top-0 flex items-center justify-between px-3 py-1.5 bg-zinc-900/90 border-b border-zinc-800">
-          <span class="text-zinc-400 font-semibold uppercase tracking-wider text-[10px]">
-            Signal Log
-          </span>
-          <button phx-click="toggle_debug_panel" class="text-zinc-500 hover:text-zinc-300 text-xs">
-            Close
+          <div class="flex items-center gap-3">
+            <span class="text-zinc-400 font-semibold uppercase tracking-wider text-[10px]">
+              Signal Log
+            </span>
+            <span class="text-zinc-600 text-[10px] tabular-nums">
+              {length(@debug_signals)} events
+            </span>
+          </div>
+          <button
+            phx-click="toggle_debug_panel"
+            class="text-zinc-500 hover:text-zinc-300 text-xs px-2 py-0.5 rounded hover:bg-zinc-800 transition-colors"
+          >
+            ✕
           </button>
         </div>
         <div class="px-3 py-1">
           <div
             :for={sig <- @debug_signals}
-            class="flex items-center gap-3 py-0.5 border-b border-zinc-800/50"
+            class="flex items-center gap-3 py-0.5 border-b border-zinc-800/50 hover:bg-zinc-800/30 transition-colors"
           >
             <span class="text-zinc-600 tabular-nums flex-shrink-0">{format_debug_ts(sig.at)}</span>
+            <span
+              class="flex-shrink-0 text-[10px] font-semibold truncate max-w-[80px]"
+              style={"color: #{LoomkinWeb.AgentColors.agent_color(sig.agent)};"}
+            >
+              {sig.agent}
+            </span>
             <span class={debug_signal_color(sig.type)}>{sig.type}</span>
-            <span class="text-zinc-500 truncate">{sig.agent}</span>
           </div>
           <div :if={@debug_signals == []} class="py-4 text-center text-zinc-600">
             No signals captured yet
@@ -4366,8 +4246,6 @@ defmodule LoomkinWeb.WorkspaceLive do
       _ -> socket
     end
   end
-
-  # tab_icon/1, tab_label/1, render_tab/2 moved to SidebarPanelComponent
 
   defp route_permission_response(_socket, action, %{source: {:agent, team_id, agent_name}} = req) do
     case Loomkin.Teams.Manager.find_agent(team_id, agent_name) do
@@ -4485,7 +4363,6 @@ defmodule LoomkinWeb.WorkspaceLive do
       socket = assign(socket, subscribed_teams: MapSet.put(subscribed, team_id))
 
       # Replay recent decision signals to catch up on events missed before subscription.
-      # The bus delivers replayed signals as regular messages, triggering refresh_decision_graphs.
       five_min_ago = System.os_time(:microsecond) - 5 * 60 * 1_000_000
       Loomkin.Signals.replay("decision.**", five_min_ago)
 
@@ -4541,41 +4418,6 @@ defmodule LoomkinWeb.WorkspaceLive do
     )
 
     assign(socket, auth_version: auth_version)
-  end
-
-  # Recompute cached roster data.
-  # Called on roster refresh — avoids per-render Registry queries.
-  # NOTE: Do NOT subscribe to PubSub topics here — this is called from many
-  # event handlers and PubSub.subscribe is not idempotent (each call adds
-  # another subscription, causing duplicate event delivery).
-  defp refresh_decision_graphs(socket) do
-    # "inspector-agent-graph" is always mounted in the context inspector (mission control).
-    # "decision-graph" lives in the sidebar graph tab (solo mode).
-    # "team-decision-graph" lives in the team sub-tab (solo mode, :team tab, :graph sub-tab).
-    ref = System.unique_integer()
-
-    if socket.assigns[:mode] == :mission_control do
-      send_update(LoomkinWeb.DecisionGraphComponent,
-        id: "inspector-agent-graph",
-        session_id: socket.assigns[:session_id],
-        team_id: socket.assigns[:active_team_id],
-        refresh_ref: ref
-      )
-    end
-
-    send_update(LoomkinWeb.DecisionGraphComponent,
-      id: "decision-graph",
-      session_id: socket.assigns[:session_id],
-      team_id: socket.assigns[:active_team_id],
-      refresh_ref: ref
-    )
-
-    send_update(LoomkinWeb.DecisionGraphComponent,
-      id: "team-decision-graph",
-      session_id: socket.assigns[:session_id],
-      team_id: socket.assigns[:display_team_id],
-      refresh_ref: ref
-    )
   end
 
   defp refresh_task_graph(socket) do
@@ -5631,8 +5473,7 @@ defmodule LoomkinWeb.WorkspaceLive do
   defp maybe_auto_follow(socket, agent_name, _payload) do
     agent = if is_binary(agent_name), do: agent_name, else: nil
 
-    if socket.assigns.mode == :mission_control && socket.assigns.inspector_mode == :auto_follow &&
-         agent do
+    if socket.assigns.inspector_mode == :auto_follow && agent do
       assign(socket, focused_agent: agent)
     else
       socket
@@ -5850,8 +5691,6 @@ defmodule LoomkinWeb.WorkspaceLive do
   defp format_llm_error(reason) when is_binary(reason), do: reason
   defp format_llm_error(reason), do: inspect(reason)
 
-  # language_from_path/1 moved to SidebarPanelComponent
-
   # --- Ask User helpers ---
 
   defp send_ask_user_answer(question_id, answer) do
@@ -5965,12 +5804,10 @@ defmodule LoomkinWeb.WorkspaceLive do
   defp load_channel_bindings(nil), do: []
 
   defp load_channel_bindings(team_id) do
-    try do
-      Loomkin.Channels.Bindings.list_bindings_for_team(team_id)
-    rescue
-      _e ->
-        []
-    end
+    Loomkin.Channels.Bindings.list_bindings_for_team(team_id)
+  rescue
+    _e ->
+      []
   end
 
   # agent_is_working?/2 moved to ComposerComponent

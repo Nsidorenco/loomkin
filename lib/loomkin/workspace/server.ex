@@ -251,6 +251,9 @@ defmodule Loomkin.Workspace.Server do
             # Re-start nervous system processes for the recovered team
             Loomkin.Teams.Manager.ensure_nervous_system(team_id)
 
+            # Rehydrate context keepers from DB
+            Loomkin.Teams.ContextKeeper.rehydrate_from_db(team_id)
+
             {:reply, {:ok, team_id}, state}
         end
 

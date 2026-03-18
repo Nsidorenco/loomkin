@@ -14,7 +14,10 @@ defmodule Loomkin.Tools.Registry do
     Loomkin.Tools.DecisionQuery,
     Loomkin.Tools.SubAgent,
     Loomkin.Tools.LspDiagnostics,
-    Loomkin.Tools.LoadSkill
+    Loomkin.Tools.LoadSkill,
+    Loomkin.Tools.CreateBacklogItem,
+    Loomkin.Tools.QueryBacklog,
+    Loomkin.Tools.UpdateBacklogItem
   ]
 
   @peer_tools [
@@ -142,10 +145,11 @@ defmodule Loomkin.Tools.Registry do
     blocker_task_id assumed_output requeue
     session_id root_cause affected_files suggested_fix files_changed verified
     verification_output
-    personas max_rounds facilitator template
+    personas max_rounds facilitator template strategy
     check_type spec_description
     test_command success_criteria max_iterations
     minutes
+    item_id status category epic tags scope_estimate assigned_to assigned_team
   )a
 
   @known_param_key_map Map.new(@known_param_keys, fn atom -> {Atom.to_string(atom), atom} end)

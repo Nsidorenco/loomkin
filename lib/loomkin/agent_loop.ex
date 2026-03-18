@@ -755,6 +755,8 @@ defmodule Loomkin.AgentLoop do
         {:ok, %{result: text}} -> text
         {:ok, text} when is_binary(text) -> text
         {:ok, map} when is_map(map) -> inspect(map)
+        {:error, _reason, %{message: msg}} -> "Error: #{msg}"
+        {:error, _reason, details} -> "Error: #{inspect(details)}"
         {:error, %{message: msg}} -> "Error: #{msg}"
         {:error, text} when is_binary(text) -> "Error: #{text}"
         {:error, reason} -> "Error: #{inspect(reason)}"

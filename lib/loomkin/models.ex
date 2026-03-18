@@ -26,7 +26,8 @@ defmodule Loomkin.Models do
     cohere: {"Cohere", "COHERE_API_KEY"},
     perplexity: {"Perplexity", "PERPLEXITY_API_KEY"},
     nvidia: {"NVIDIA", "NVIDIA_API_KEY"},
-    azure: {"Azure", "AZURE_API_KEY"}
+    azure: {"Azure", "AZURE_API_KEY"},
+    google_vertex: {"Google Vertex AI", "GOOGLE_APPLICATION_CREDENTIALS"}
   }
 
   # Providers that support OAuth authentication.

@@ -82,7 +82,7 @@ defmodule Loomkin.Tools.TeamSpawn do
       "[Kin:team_spawn] team=#{team_name} roles=#{inspect(roles)} parent=#{inspect(parent_team_id)}"
     )
 
-    {:ok, team_id} =
+    team_result =
       if parent_team_id do
         Manager.create_sub_team(parent_team_id, agent_name,
           name: team_name,
@@ -91,6 +91,18 @@ defmodule Loomkin.Tools.TeamSpawn do
       else
         Manager.create_team(name: team_name, project_path: project_path)
       end
+
+    case team_result do
+      {:error, reason} ->
+        {:error, "Failed to create team '#{team_name}': #{inspect(reason)}"}
+
+      {:ok, team_id} ->
+        do_spawn_agents(team_id, team_name, purpose, roles, project_path, session_id, model)
+    end
+  end
+
+  defp do_spawn_agents(team_id, team_name, purpose, roles, project_path, session_id, model) do
+    require Logger
 
     spawn_opts =
       [project_path: project_path]

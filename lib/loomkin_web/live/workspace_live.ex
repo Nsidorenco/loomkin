@@ -101,6 +101,8 @@ defmodule LoomkinWeb.WorkspaceLive do
         following_ids: MapSet.new(),
         # Save chat modal
         show_save_chat_modal: false,
+        # Session history modal (mission control mode)
+        show_session_history: false,
         multi_tenant: Application.get_env(:loomkin, :multi_tenant, false),
         workspace_id: nil,
         context_info: Loomkin.Session.ContextWindow.context_usage_info(nil, [])
@@ -386,13 +388,8 @@ defmodule LoomkinWeb.WorkspaceLive do
       end)
       |> Enum.uniq()
 
-    # Send history events to the activity component (will arrive on first update)
-    if history_events != [] do
-      send_update(LoomkinWeb.TeamActivityComponent,
-        id: "team-activity",
-        reset_events: history_events
-      )
-    end
+    # TeamActivityComponent was removed from the template; history events are
+    # captured via buffered_activity_events assign instead.
 
     socket =
       assign(socket,
@@ -765,6 +762,10 @@ defmodule LoomkinWeb.WorkspaceLive do
 
   def handle_event("toggle_social_panel", _params, socket) do
     {:noreply, update(socket, :social_panel_open, &(!&1))}
+  end
+
+  def handle_event("toggle_session_history", _params, socket) do
+    {:noreply, update(socket, :show_session_history, &(!&1))}
   end
 
   def handle_event("open_save_chat_modal", _params, socket) do
@@ -1352,84 +1353,21 @@ defmodule LoomkinWeb.WorkspaceLive do
         healing_error_category: category
       })
 
-    event = %{
-      id: Ecto.UUID.generate(),
-      type: :healing_started,
-      agent: agent_name,
-      content: "#{agent_name} suspended for healing: #{category}",
-      timestamp: DateTime.utc_now(),
-      expanded: false,
-      metadata: %{session_id: sig.data[:session_id], team_id: sig.data[:team_id]}
-    }
-
-    socket =
-      socket
-      |> stream_insert(:comms_events, event)
-      |> update(:comms_event_count, &(&1 + 1))
-
     {:noreply, socket}
   end
 
   def handle_info(%Jido.Signal{type: "healing.diagnosis.complete"} = sig, socket) do
-    %{agent_name: agent_name, root_cause: root_cause, confidence: confidence} = sig.data
-
-    socket = update_agent_card(socket, agent_name, %{healing_phase: :fixing})
-
-    confidence_pct = round(confidence * 100)
-
-    event = %{
-      id: Ecto.UUID.generate(),
-      type: :healing_diagnosis,
-      agent: agent_name,
-      content: "Diagnosis: #{root_cause} (confidence: #{confidence_pct}%)",
-      timestamp: DateTime.utc_now(),
-      expanded: false,
-      metadata: %{session_id: sig.data[:session_id], team_id: sig.data[:team_id]}
-    }
-
-    socket =
-      socket
-      |> stream_insert(:comms_events, event)
-      |> update(:comms_event_count, &(&1 + 1))
-
-    {:noreply, socket}
+    %{agent_name: agent_name} = sig.data
+    {:noreply, update_agent_card(socket, agent_name, %{healing_phase: :fixing})}
   end
 
   def handle_info(%Jido.Signal{type: "healing.fix.applied"} = sig, socket) do
-    %{agent_name: agent_name, files_changed: files_changed} = sig.data
-
-    socket = update_agent_card(socket, agent_name, %{healing_phase: :confirming})
-
-    file_count = length(files_changed)
-
-    files_display =
-      case files_changed do
-        [] -> "none"
-        [f] -> f
-        [f1, f2] -> "#{f1}, #{f2}"
-        [f | _] -> "#{f} and #{file_count - 1} more"
-      end
-
-    event = %{
-      id: Ecto.UUID.generate(),
-      type: :healing_fix_applied,
-      agent: agent_name,
-      content: "Fix applied to #{file_count} file(s): #{files_display}",
-      timestamp: DateTime.utc_now(),
-      expanded: false,
-      metadata: %{session_id: sig.data[:session_id], team_id: sig.data[:team_id]}
-    }
-
-    socket =
-      socket
-      |> stream_insert(:comms_events, event)
-      |> update(:comms_event_count, &(&1 + 1))
-
-    {:noreply, socket}
+    %{agent_name: agent_name} = sig.data
+    {:noreply, update_agent_card(socket, agent_name, %{healing_phase: :confirming})}
   end
 
   def handle_info(%Jido.Signal{type: "healing.session.complete"} = sig, socket) do
-    %{agent_name: agent_name, outcome: outcome, duration_ms: duration_ms} = sig.data
+    %{agent_name: agent_name, outcome: outcome} = sig.data
 
     card_updates =
       case outcome do
@@ -1441,43 +1379,6 @@ defmodule LoomkinWeb.WorkspaceLive do
       end
 
     socket = update_agent_card(socket, agent_name, card_updates)
-
-    {event_type, content} =
-      case outcome do
-        :healed ->
-          {:healing_complete,
-           "Healing complete: #{agent_name} resumed (#{format_duration(duration_ms)})"}
-
-        :escalated ->
-          {:healing_failed,
-           "Healing failed: #{agent_name} escalated (#{format_duration(duration_ms)})"}
-
-        :timed_out ->
-          {:healing_failed,
-           "Healing timed out: #{agent_name} escalated (#{format_duration(duration_ms)})"}
-
-        :cancelled ->
-          {:healing_failed, "Healing cancelled: #{agent_name} (#{format_duration(duration_ms)})"}
-      end
-
-    event = %{
-      id: Ecto.UUID.generate(),
-      type: event_type,
-      agent: agent_name,
-      content: content,
-      timestamp: DateTime.utc_now(),
-      expanded: false,
-      metadata: %{
-        session_id: sig.data[:session_id],
-        team_id: sig.data[:team_id],
-        outcome: outcome
-      }
-    }
-
-    socket =
-      socket
-      |> stream_insert(:comms_events, event)
-      |> update(:comms_event_count, &(&1 + 1))
 
     {:noreply, socket}
   end
@@ -1800,26 +1701,11 @@ defmodule LoomkinWeb.WorkspaceLive do
         socket
       end
 
-    event = %{
-      id: Ecto.UUID.generate(),
-      type: :approval_gate_requested,
-      agent: agent_name,
-      content: "#{agent_name} is requesting approval: #{question}",
-      timestamp: DateTime.utc_now(),
-      expanded: true,
-      metadata: %{gate_id: gate_id}
-    }
-
-    socket =
-      socket
-      |> stream_insert(:comms_events, event)
-      |> update(:comms_event_count, &(&1 + 1))
-
     {:noreply, socket}
   end
 
   def handle_info(%Jido.Signal{type: "agent.approval.resolved"} = sig, socket) do
-    %{gate_id: gate_id, agent_name: agent_name, outcome: outcome} = sig.data
+    %{gate_id: gate_id, agent_name: agent_name} = sig.data
 
     socket = update_agent_card(socket, agent_name, %{pending_approval: nil})
 
@@ -1829,28 +1715,6 @@ defmodule LoomkinWeb.WorkspaceLive do
       else
         socket
       end
-
-    outcome_label =
-      case outcome do
-        :timeout -> "timed out"
-        :approved -> "approved"
-        :denied -> "denied"
-      end
-
-    event = %{
-      id: Ecto.UUID.generate(),
-      type: :approval_gate_resolved,
-      agent: agent_name,
-      content: "Approval gate #{outcome_label} by human",
-      timestamp: DateTime.utc_now(),
-      expanded: false,
-      metadata: %{gate_id: gate_id, outcome: outcome}
-    }
-
-    socket =
-      socket
-      |> stream_insert(:comms_events, event)
-      |> update(:comms_event_count, &(&1 + 1))
 
     {:noreply, socket}
   end
@@ -1886,56 +1750,13 @@ defmodule LoomkinWeb.WorkspaceLive do
 
     socket = update_agent_card(socket, agent_name, %{pending_approval: pending_approval})
 
-    role_count = if is_map(roles), do: map_size(roles), else: length(roles)
-    cost = estimated_cost || 0.0
-
-    event = %{
-      id: Ecto.UUID.generate(),
-      type: :spawn_gate_opened,
-      agent: agent_name,
-      content:
-        "#{agent_name} requesting approval to spawn #{team_name} (#{role_count} roles, est. $#{Float.round(cost, 4)})",
-      timestamp: DateTime.utc_now(),
-      expanded: true,
-      metadata: %{gate_id: gate_id, team_name: team_name, estimated_cost: cost}
-    }
-
-    socket =
-      socket
-      |> stream_insert(:comms_events, event)
-      |> update(:comms_event_count, &(&1 + 1))
-
     {:noreply, socket}
   end
 
   def handle_info(%Jido.Signal{type: "agent.spawn.gate.resolved"} = sig, socket) do
     %{agent_name: agent_name} = sig.data
-    outcome = sig.data[:outcome] || :approved
 
     socket = update_agent_card(socket, agent_name, %{pending_approval: nil})
-
-    outcome_label =
-      case outcome do
-        :approved -> "approved"
-        :denied -> "denied"
-        :timeout -> "timed out"
-        _ -> "resolved"
-      end
-
-    event = %{
-      id: Ecto.UUID.generate(),
-      type: :spawn_gate_resolved,
-      agent: agent_name,
-      content: "Spawn gate #{outcome_label} for #{agent_name}",
-      timestamp: DateTime.utc_now(),
-      expanded: false,
-      metadata: %{outcome: outcome}
-    }
-
-    socket =
-      socket
-      |> stream_insert(:comms_events, event)
-      |> update(:comms_event_count, &(&1 + 1))
 
     {:noreply, socket}
   end
@@ -2125,40 +1946,6 @@ defmodule LoomkinWeb.WorkspaceLive do
     event_type = sig.data[:event] || :escalation
     idle_min = sig.data[:idle_min] || 0
 
-    {comms_type, content} =
-      case event_type do
-        :nudge ->
-          nudge_count = sig.data[:nudge_count] || 1
-          max_nudges = sig.data[:max_nudges] || 2
-
-          {:rebalance_nudge,
-           "#{agent_name} stuck for #{idle_min}m — nudge #{nudge_count}/#{max_nudges}"}
-
-        _escalation ->
-          task_info = sig.data[:task_info]
-          task_suffix = if task_info && task_info != "", do: " (task: #{task_info})", else: ""
-
-          {:rebalance_escalation,
-           "#{agent_name} stuck for #{idle_min}m — escalating#{task_suffix}"}
-      end
-
-    comms_event = %{
-      id: Ecto.UUID.generate(),
-      type: comms_type,
-      agent: agent_name,
-      content: content,
-      timestamp: DateTime.utc_now(),
-      expanded: false,
-      metadata: %{
-        team_id: sig.data[:team_id],
-        idle_min: idle_min,
-        event: event_type,
-        nudge_count: sig.data[:nudge_count],
-        max_nudges: sig.data[:max_nudges],
-        task_info: sig.data[:task_info]
-      }
-    }
-
     # Set stuck_warning on the agent card
     card_updates =
       case event_type do
@@ -2178,11 +1965,7 @@ defmodule LoomkinWeb.WorkspaceLive do
           }
       end
 
-    socket =
-      socket
-      |> update_agent_card(agent_name, card_updates)
-      |> stream_insert(:comms_events, comms_event)
-      |> update(:comms_event_count, &(&1 + 1))
+    socket = update_agent_card(socket, agent_name, card_updates)
 
     {:noreply, socket}
   end
@@ -2216,28 +1999,15 @@ defmodule LoomkinWeb.WorkspaceLive do
     {:noreply, socket}
   end
 
-  # Agent crash/recovery signals — update card status and insert comms events
+  # Agent crash/recovery signals — update card status only (comms-noise moved to signals)
   def handle_info(%Jido.Signal{type: "agent.crashed"} = sig, socket) do
     agent_name = sig.data[:agent_name] || "unknown"
     crash_count = sig.data[:crash_count] || 1
-    reason = sig.data[:reason] || "unknown"
-
-    event = %{
-      id: Ecto.UUID.generate(),
-      type: :agent_crashed,
-      agent: agent_name,
-      content: "#{agent_name} crashed (reason: #{inspect(reason)})",
-      timestamp: DateTime.utc_now(),
-      expanded: false,
-      metadata: %{team_id: sig.data[:team_id]}
-    }
 
     socket =
       socket
       |> update_card_status(agent_name, :crashed)
       |> update_agent_card(agent_name, %{crash_count: crash_count})
-      |> stream_insert(:comms_events, event)
-      |> update(:comms_event_count, &(&1 + 1))
 
     {:noreply, socket}
   end
@@ -2246,24 +2016,12 @@ defmodule LoomkinWeb.WorkspaceLive do
     agent_name = sig.data[:agent_name] || "unknown"
     crash_count = sig.data[:crash_count] || 0
 
-    event = %{
-      id: Ecto.UUID.generate(),
-      type: :agent_recovered,
-      agent: agent_name,
-      content: "#{agent_name} recovered (crash count: #{crash_count})",
-      timestamp: DateTime.utc_now(),
-      expanded: false,
-      metadata: %{team_id: sig.data[:team_id]}
-    }
-
     Process.send_after(self(), {:clear_recovering, agent_name}, 2_000)
 
     socket =
       socket
       |> update_card_status(agent_name, :recovering)
       |> update_agent_card(agent_name, %{crash_count: crash_count})
-      |> stream_insert(:comms_events, event)
-      |> update(:comms_event_count, &(&1 + 1))
 
     {:noreply, socket}
   end
@@ -2272,22 +2030,10 @@ defmodule LoomkinWeb.WorkspaceLive do
     agent_name = sig.data[:agent_name] || "unknown"
     crash_count = sig.data[:crash_count] || 0
 
-    event = %{
-      id: Ecto.UUID.generate(),
-      type: :agent_permanently_failed,
-      agent: agent_name,
-      content: "#{agent_name} permanently failed after #{crash_count} crashes",
-      timestamp: DateTime.utc_now(),
-      expanded: false,
-      metadata: %{team_id: sig.data[:team_id]}
-    }
-
     socket =
       socket
       |> update_card_status(agent_name, :permanently_failed)
       |> update_agent_card(agent_name, %{crash_count: crash_count})
-      |> stream_insert(:comms_events, event)
-      |> update(:comms_event_count, &(&1 + 1))
 
     {:noreply, socket}
   end
@@ -2625,7 +2371,7 @@ defmodule LoomkinWeb.WorkspaceLive do
     if !File.dir?(path) do
       {:noreply, put_flash(socket, :error, "Directory not found: #{path}")}
     else
-      team_id = socket.assigns[:team_id]
+      team_id = socket.assigns[:active_team_id] || socket.assigns[:team_id]
       # Include sub-team agents so we don't skip confirmation while child agents are running
       agents = if team_id, do: Teams.Manager.list_all_agents(team_id), else: []
       active = Enum.filter(agents, fn a -> a.status not in [:idle] end)
@@ -2695,7 +2441,7 @@ defmodule LoomkinWeb.WorkspaceLive do
     modal = socket.assigns.switch_project_modal
 
     if modal do
-      team_id = socket.assigns[:team_id]
+      team_id = socket.assigns[:active_team_id] || socket.assigns[:team_id]
       if team_id, do: Teams.Manager.cancel_all_loops(team_id)
       {:noreply, do_switch_project(socket, modal.target_path)}
     else
@@ -2707,7 +2453,7 @@ defmodule LoomkinWeb.WorkspaceLive do
   def handle_info({:change_model, model}, socket) do
     Session.update_model(socket.assigns.session_id, model)
 
-    if team_id = socket.assigns[:team_id] do
+    if team_id = socket.assigns[:active_team_id] || socket.assigns[:team_id] do
       Teams.Manager.update_all_models(team_id, model)
     end
 
@@ -4113,18 +3859,7 @@ defmodule LoomkinWeb.WorkspaceLive do
             />
           </button>
 
-          <%!-- Save Chat button (multi-tenant mode only) --%>
-          <button
-            :if={
-              @multi_tenant && @current_scope && @current_scope.user &&
-                @session_id
-            }
-            phx-click="open_save_chat_modal"
-            class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-gray-400 hover:text-white bg-surface-2 border border-border-subtle hover:border-border-hover transition-all"
-            title="Save chat as snippet"
-          >
-            <.icon name="hero-bookmark-mini" class="w-3.5 h-3.5" /> Save Chat
-          </button>
+          <%!-- Save Chat button moved to Session History modal --%>
         </div>
       </header>
 
@@ -4183,11 +3918,41 @@ defmodule LoomkinWeb.WorkspaceLive do
           <span class="text-purple-400">{length(@cached_agents)}</span> agents
         </span>
 
-        <%!-- Debug panel toggle — right-aligned with signal count badge --%>
+        <%!-- Session history toggle (mission control only) --%>
+        <button
+          :if={@mode == :mission_control}
+          phx-click="toggle_session_history"
+          class={[
+            "ml-auto flex items-center gap-1.5 px-2.5 py-1 rounded-md transition-colors",
+            if(@show_session_history,
+              do: "bg-violet-600/30 text-violet-300",
+              else: "hover:bg-surface-2 text-zinc-400 hover:text-zinc-200"
+            )
+          ]}
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            class="h-3.5 w-3.5"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+            />
+          </svg>
+          <span class="text-xs">history</span>
+        </button>
+
+        <%!-- Debug panel toggle — signal count badge --%>
         <button
           phx-click="toggle_debug_panel"
           class={[
-            "ml-auto flex items-center gap-1.5 px-2.5 py-1 rounded-md transition-colors",
+            "flex items-center gap-1.5 px-2.5 py-1 rounded-md transition-colors",
+            if(@mode != :mission_control, do: "ml-auto"),
             if(@debug_panel_open,
               do: "bg-violet-600/30 text-violet-300",
               else: "hover:bg-surface-2 text-zinc-400 hover:text-zinc-200"
@@ -4283,13 +4048,13 @@ defmodule LoomkinWeb.WorkspaceLive do
             project_path={@project_path}
           />
         <% else %>
-          <%!-- Mission Control Left: Agent Cards + Comms + Composer --%>
+          <%!-- Mission Control Left: Kin Cards + Comms (full height) + Composer --%>
           <div
-            id="mc-split-container"
+            id="mc-main-container"
             class="flex-1 flex flex-col min-w-0 min-h-0 border-r border-subtle overflow-hidden"
-            phx-hook="VerticalSplit"
           >
-            <div id="mc-top-pane" class="flex-shrink-0 overflow-hidden flex flex-col">
+            <%!-- Kin cards + comms fill all available space --%>
+            <div class="flex-1 overflow-hidden flex flex-col min-h-0">
               <.live_component
                 module={LoomkinWeb.MissionControlPanelComponent}
                 id="mission-control-panel"
@@ -4308,27 +4073,109 @@ defmodule LoomkinWeb.WorkspaceLive do
               />
             </div>
 
-            <%!-- Drag handle --%>
+            <%!-- Pending ask_user questions --%>
             <div
-              id="mc-split-handle"
-              class="flex-shrink-0 h-1.5 cursor-row-resize flex items-center justify-center group hover:bg-violet-500/20 active:bg-violet-500/30 transition-[background] duration-150 border-y border-subtle"
-            >
-              <div class="w-8 h-0.5 rounded-full bg-zinc-600 group-hover:bg-violet-400 group-active:bg-violet-400 transition-[background] duration-150">
-              </div>
-            </div>
-
-            <%!-- Chat + Composer column --%>
-            <div
-              id="mc-bottom-pane"
-              class="flex flex-col min-w-0 border-r border-subtle"
-              style="flex: 1 1 auto; min-height: 150px;"
+              :if={@pending_questions != []}
+              class="flex-shrink-0 px-3 py-2 border-t border-brand bg-surface-1"
             >
               <.live_component
-                module={LoomkinWeb.SessionSwitcherComponent}
-                id="session-switcher"
-                session_id={@session_id}
-                project_path={@project_path}
+                module={LoomkinWeb.AskUserComponent}
+                id="ask-user-questions-mc"
+                questions={@pending_questions}
               />
+            </div>
+
+            <%!-- Composer with session history toggle --%>
+            <.live_component
+              module={LoomkinWeb.ComposerComponent}
+              id="composer"
+              input_text={@input_text}
+              reply_target={Map.get(assigns, :reply_target)}
+              cached_agents={@cached_agents}
+              cached_budget={@cached_budget}
+              budget_pct={@budget_pct}
+              budget_bar_color_class={@budget_bar_color_class}
+              last_user_message={@last_user_message}
+              queue_drawer={@queue_drawer}
+              scheduled_messages={@scheduled_messages}
+              agent_queues={@agent_queues}
+              active_team_id={@active_team_id}
+              session_id={@session_id}
+              status={@status}
+              agent_cards={@agent_cards}
+              broadcast_mode={@broadcast_mode}
+              agent_count={length(@cached_agents)}
+            />
+
+            <%!-- Queue drawer overlay --%>
+            <.live_component
+              :if={@queue_drawer}
+              module={LoomkinWeb.MessageQueueComponent}
+              id={"queue-drawer-#{@queue_drawer.agent}"}
+              queue={Map.get(@agent_queues, @queue_drawer.agent, [])}
+              agent_name={@queue_drawer.agent}
+              team_id={@queue_drawer.team_id}
+            />
+          </div>
+
+          <%!-- Session History Modal --%>
+          <div
+            :if={@show_session_history}
+            id="session-history-modal"
+            class="fixed inset-0 z-50 flex items-center justify-center"
+          >
+            <div
+              class="absolute inset-0 bg-black/60 backdrop-blur-sm"
+              phx-click="toggle_session_history"
+              aria-hidden="true"
+            />
+            <div class="relative z-10 glass rounded-2xl w-full max-w-3xl h-[75vh] flex flex-col overflow-hidden animate-fade-in">
+              <div class="flex items-center justify-between px-4 py-3 border-b border-border-subtle">
+                <div class="flex items-center gap-2">
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    class="h-4 w-4 text-violet-400"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                    />
+                  </svg>
+                  <h2 class="text-sm font-semibold text-white">Session History</h2>
+                </div>
+                <div class="flex items-center gap-2">
+                  <button
+                    :if={
+                      @multi_tenant && @current_scope && @current_scope.user &&
+                        @session_id
+                    }
+                    phx-click="open_save_chat_modal"
+                    class="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs text-zinc-400 hover:text-white hover:bg-surface-2 transition-colors"
+                    title="Save chat as snippet"
+                  >
+                    <.icon name="hero-bookmark-mini" class="w-3.5 h-3.5" /> Save
+                  </button>
+                  <button
+                    phx-click="toggle_session_history"
+                    class="text-zinc-500 hover:text-zinc-300 text-xs"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+              <div class="px-4 py-2 border-b border-border-subtle bg-surface-1/50">
+                <.live_component
+                  module={LoomkinWeb.SessionSwitcherComponent}
+                  id="session-switcher"
+                  session_id={@session_id}
+                  project_path={@project_path}
+                />
+              </div>
               <div class="flex-1 overflow-auto min-h-0">
                 <.live_component
                   module={LoomkinWeb.ChatComponent}
@@ -4346,49 +4193,6 @@ defmodule LoomkinWeb.WorkspaceLive do
                   context_info={@context_info}
                 />
               </div>
-
-              <%!-- Pending ask_user questions --%>
-              <div
-                :if={@pending_questions != []}
-                class="flex-shrink-0 px-3 py-2 border-t border-brand bg-surface-1"
-              >
-                <.live_component
-                  module={LoomkinWeb.AskUserComponent}
-                  id="ask-user-questions-mc"
-                  questions={@pending_questions}
-                />
-              </div>
-
-              <.live_component
-                module={LoomkinWeb.ComposerComponent}
-                id="composer"
-                input_text={@input_text}
-                reply_target={Map.get(assigns, :reply_target)}
-                cached_agents={@cached_agents}
-                cached_budget={@cached_budget}
-                budget_pct={@budget_pct}
-                budget_bar_color_class={@budget_bar_color_class}
-                last_user_message={@last_user_message}
-                queue_drawer={@queue_drawer}
-                scheduled_messages={@scheduled_messages}
-                agent_queues={@agent_queues}
-                active_team_id={@active_team_id}
-                session_id={@session_id}
-                status={@status}
-                agent_cards={@agent_cards}
-                broadcast_mode={@broadcast_mode}
-                agent_count={length(@cached_agents)}
-              />
-
-              <%!-- Queue drawer overlay --%>
-              <.live_component
-                :if={@queue_drawer}
-                module={LoomkinWeb.MessageQueueComponent}
-                id={"queue-drawer-#{@queue_drawer.agent}"}
-                queue={Map.get(@agent_queues, @queue_drawer.agent, [])}
-                agent_name={@queue_drawer.agent}
-                team_id={@queue_drawer.team_id}
-              />
             </div>
           </div>
 
@@ -4921,13 +4725,9 @@ defmodule LoomkinWeb.WorkspaceLive do
     |> assign(activity_known_agents: agents)
   end
 
-  # Send an activity event to the TeamActivityComponent's internal stream
+  # Buffer an activity event for the workspace (TeamActivityComponent was removed;
+  # the buffered list is kept for potential future use / debugging).
   defp push_activity_event(socket, event) do
-    send_update(LoomkinWeb.TeamActivityComponent,
-      id: "team-activity",
-      new_event: event
-    )
-
     socket
     |> update(:activity_event_count, &(&1 + 1))
     |> update(:buffered_activity_events, &[event | Enum.take(&1, 199)])
@@ -5439,6 +5239,8 @@ defmodule LoomkinWeb.WorkspaceLive do
   # --- Agent Cards + Comms routing (mission control v2) ---
 
   # Event types that belong in the inter-agent comms feed
+  # Only genuine inter-agent communication belongs in comms.
+  # System/operational events (crashes, healing, gates, rebalancing) route to signals.
   @comms_event_types [
     :message,
     :discovery,
@@ -5447,24 +5249,15 @@ defmodule LoomkinWeb.WorkspaceLive do
     :question,
     :answer,
     :tasks_unblocked,
-    :role_changed,
     :escalation,
     :channel_message,
     :peer_message,
     :task_created,
     :task_assigned,
     :task_complete,
-    :error,
-    :rebalance_nudge,
-    :rebalance_escalation,
     :conflict,
     :vote_response,
-    :debate_response,
-    :healing_started,
-    :healing_diagnosis,
-    :healing_fix_applied,
-    :healing_complete,
-    :healing_failed
+    :debate_response
   ]
 
   defp forward_to_cards_and_comms(socket, pubsub_event) do
@@ -5922,41 +5715,12 @@ defmodule LoomkinWeb.WorkspaceLive do
     forward_to_dashboard(socket)
   end
 
-  defp forward_to_dashboard(socket) do
-    tid = socket.assigns[:active_team_id] || socket.assigns[:team_id]
+  # TeamDashboardComponent was removed from the template; this is now a no-op.
+  defp forward_to_dashboard(_socket), do: :ok
 
-    if tid do
-      send_update(LoomkinWeb.TeamDashboardComponent, id: "team-dashboard", team_id: tid)
-    end
-  end
-
-  defp forward_to_cost(socket) do
-    tid = socket.assigns[:active_team_id] || socket.assigns[:team_id]
-
-    if tid do
-      try do
-        send_update(LoomkinWeb.TeamCostComponent, id: "team-cost", team_id: tid)
-      rescue
-        ArgumentError -> :ok
-      end
-    end
-  end
-
-  defp forward_to_context_library(socket) do
-    tid = socket.assigns[:active_team_id] || socket.assigns[:team_id]
-
-    if tid do
-      try do
-        send_update(LoomkinWeb.ContextLibraryComponent,
-          id: "context-library",
-          team_id: tid,
-          reload: true
-        )
-      rescue
-        ArgumentError -> :ok
-      end
-    end
-  end
+  # TeamCostComponent and ContextLibraryComponent were removed from the template.
+  defp forward_to_cost(_socket), do: :ok
+  defp forward_to_context_library(_socket), do: :ok
 
   defp trackable_agent_name(name) when is_binary(name) do
     trimmed = String.trim(name)
@@ -5983,7 +5747,7 @@ defmodule LoomkinWeb.WorkspaceLive do
   # format_agent_role/1 moved to MissionControlPanelComponent
 
   defp do_switch_project(socket, path) do
-    team_id = socket.assigns[:team_id]
+    team_id = socket.assigns[:active_team_id] || socket.assigns[:team_id]
     session_id = socket.assigns.session_id
     user = socket.assigns[:current_scope] && socket.assigns.current_scope.user
 
@@ -6262,20 +6026,6 @@ defmodule LoomkinWeb.WorkspaceLive do
   end
 
   defp maybe_insert_synthesis_comms_event(socket, _agent_name, _status, _metadata), do: socket
-
-  defp format_duration(ms) when is_integer(ms) and ms < 1000, do: "#{ms}ms"
-
-  defp format_duration(ms) when is_integer(ms) do
-    seconds = div(ms, 1000)
-
-    if seconds < 60 do
-      "#{seconds}s"
-    else
-      "#{div(seconds, 60)}m #{rem(seconds, 60)}s"
-    end
-  end
-
-  defp format_duration(_), do: "unknown"
 
   defp format_debug_ts(ms) when is_integer(ms) do
     dt = DateTime.from_unix!(ms, :millisecond)

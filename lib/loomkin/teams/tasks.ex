@@ -73,7 +73,13 @@ defmodule Loomkin.Teams.Tasks do
   end
 
   def complete_task(task_id, attrs) when is_map(attrs) do
-    task = get_task!(task_id)
+    case get_task(task_id) do
+      {:ok, task} -> do_complete_task(task, attrs)
+      {:error, :not_found} -> {:error, :not_found}
+    end
+  end
+
+  defp do_complete_task(task, attrs) do
     result = get_flexible(attrs, :result, "result") || ""
 
     if task.status in [:completed, :failed] do

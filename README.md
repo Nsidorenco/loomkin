@@ -23,12 +23,14 @@ Watch it all unfold from a live mission control UI. Built on Erlang/OTP.
 - **Self-healing teams** — error classification, automatic diagnosis and repair via ephemeral agents, no human intervention needed
 - **Verification loops** — autonomous write-test-diagnose-fix cycles with upstream verifiers that check output before dependents proceed
 - **Workspaces** — persistent layer above sessions. Teams, tasks, and progress survive tab closes and reconnects
+- **Kindred bundles** — shareable agent persona packs. Organizations group users; the reflection agent reviews team patterns and proposes improvements
+- **Social platform** — auth, community snippets, skill publishing. Agents author and install skills from the community or git repos
 - **LiveView web UI** — 39 components, zero handwritten JavaScript. Mission control with agent cards, comms feed, decision graph, context library, settings, permissions dashboard
 - **58 built-in tools**, 16 LLM providers, 665+ models via [req_llm](https://github.com/agentjido/req_llm), plus Ollama for local LLMs
-- **Skill system** — agents discover and load skills on demand from disk, in-app authoring, or community snippets
+- **Skill system** — Jido-integrated runtime skills, in-app editor, publish/install flows, git repo import, and community sharing
 - **Hot code reloading** — update tools, providers, and prompts without restarting sessions or losing state
 
-[loomkin.dev](https://loomkin.dev) | 305 source files, ~73K LOC, 2,600+ tests
+[loomkin.dev](https://loomkin.dev) | 328 source files, ~77K LOC, 2,700+ tests
 
 <p align="center">
   <img src="assets/loomkin-example.jpg" alt="Loomkin example session — fixing a failing test" width="700">
@@ -56,6 +58,8 @@ Watch it all unfold from a live mission control UI. Built on Erlang/OTP.
 | **Web UI** | Terminal only, or separate web app | LiveView mission control — agent cards, comms feed, decision graph, context library, permissions. Zero JS |
 | **Decision persistence** | None | PostgreSQL DAG with 7 node types, typed edges, confidence scores, pulse reports |
 | **Session persistence** | None | Workspaces persist teams and tasks across tab closes and reconnects |
+| **Community** | None | Social platform — publish skills, share kin agents, install from community or git repos |
+| **Self-improvement** | None | Reflection agent reviews team patterns and proposes improvements via kindred bundles |
 | **MCP** | Client or server | Both — expose tools to editors AND consume external tools |
 | **Hot reload** | Restart required | Update tools, providers, prompts while agents are running |
 
@@ -73,6 +77,8 @@ Watch it all unfold from a live mission control UI. Built on Erlang/OTP.
 - An API key for at least one LLM provider (Anthropic, OpenAI, Google, etc.)
 
 > **No Docker?** If you prefer system-installed Postgres, set `DB_PORT=5432` (or your custom port) in your environment and skip the `make db.up` step.
+
+> **Dev container?** A shared SSH-accessible container with Tailscale, mise tooling, and Postgres is available for team development. See the devcontainer config in the repo.
 
 ### Install
 
@@ -143,6 +149,8 @@ mix phx.server
 - **Verification loops** — autonomous write → test → diagnose → fix → re-test cycles. Upstream verifiers auto-spawn on task completion to validate output before dependents proceed
 - **Speculative execution** — agents work ahead on likely next steps. If assumptions hold, the work stands. If not, it gets discarded cleanly
 - **Task negotiation** — agents can counter-propose task assignments, suggesting better-suited teammates or flagging concerns. Uncontested assignments auto-accept
+- **Partial task results** — tasks emit intermediate output so dependents can proceed without waiting for full completion
+- **Adaptive team spawning** — complexity monitor auto-scales team size based on task demands. Tool-call cycle detection prevents infinite loops
 - **Cross-team communication** — sub-teams discover siblings, send lateral messages, and query agents across team boundaries
 - **Structured debate** — propose/critique/revise/vote cycle with policy-driven consensus and convergence tracking
 - **Pair programming** — dedicated coder + reviewer pairing with real-time event exchange
@@ -151,10 +159,11 @@ mix phx.server
 
 ### Interfaces
 
-- **Mission control UI** — 39 LiveView components, zero handwritten JavaScript. Fixed agent cards with live status, thinking, and tool calls. Comms feed for inter-agent communication. Interactive decision graph. Context library for inspecting keeper state. Permission dashboard with trust policies and audit trail. Settings panel for runtime configuration. Kin management panel for custom agent personas
+- **Mission control UI** — 39 LiveView components, zero handwritten JavaScript. Fixed agent cards with live status, thinking, and tool calls. Comms feed for inter-agent communication. Interactive decision graph. Context library for inspecting keeper state. Permission dashboard with trust policies and audit trail. Settings panel wired to 14 runtime-configurable modules. Kin management panel for custom agent personas
 - **Workspaces** — persistent layer above sessions. Teams, tasks, and progress survive tab closes. Sessions are just how you connect to your workspace
+- **Social platform** — `phx.gen.auth`-based authentication with multi-tenant gate. Community snippets (skills, prompts, kin agents, chat logs). Homepage feed with dense layout
 - **Visible message queues** — every agent's pending messages are visible and editable. Reorder, squash, delete, or schedule messages to steer agents without disrupting their current work
-- **Skill system** — agents see available skills in their context and load full details on demand. Skills auto-load from disk (`.agents/skills/`), can be authored in-app, published as community snippets, and installed by others
+- **Skill system** — Jido-integrated runtime skills with in-app editor, publish/install flows, and git repo import. Skills auto-load from disk (`.agents/skills/`) or install from community snippets
 - **MCP server + client** — expose Loomkin's tools to VS Code/Cursor/Zed; consume external tools from Tidewave, HexDocs, and any MCP server. Bidirectional by default
 - **Architect/Editor mode** — strong model (e.g. Opus) plans edits, fast model (e.g. Haiku) executes them. Can spawn full teams for complex tasks instead of file-based plans
 - **Spawn approval gates** — approve or deny agent spawns from the UI, with auto-approve toggle for trusted workflows
@@ -164,6 +173,7 @@ mix phx.server
 - **58 built-in tools** — file ops, glob/regex search, shell, git, LSP diagnostics, decision logging/querying, team management, peer communication, context mesh, verification, self-introspection, conversation spawning, skill loading, acceptance checks
 - **16 LLM providers + local** — Anthropic, OpenAI, Google, Z.AI, xAI, Groq, DeepSeek, OpenRouter, Mistral, Cerebras, Together AI, Fireworks AI, Cohere, Perplexity, NVIDIA, Azure. 665+ models via req_llm. Ollama for local LLMs
 - **Typed signal bus** — 28+ signal types across 8 domains (agent, team, context, decision, session, system, channel, collaboration) via Jido.Signal. ETS journal for replay
+- **Organizations & kindred** — multi-user organizations, kindred bundles (shareable agent persona packs), reflection agent that reviews team patterns and proposes improvements
 - **LSP client** — compiler errors/warnings from ElixirLS, next-ls, and other language servers
 - **File watcher** — OS-native with 200ms debounce, `.gitignore` filtering, automatic ETS index + repo map refresh
 - **Workspace persistence** — teams, tasks, and task journals persist in PostgreSQL. Sessions are ephemeral UI overlays
@@ -198,14 +208,18 @@ mix phx.server
 │  Agent Runtime                                           │
 │  Conversation Agents │ Self-Healing │ Verification Loop  │
 │  Speculative Execution │ Task Negotiation │ Orchestrator │
+│  Adaptive Spawning │ Partial Results │ Reflection Agent │
 ├──────────────────────────────────────────────────────────┤
 │  Tool Layer (58 Actions)                                 │
 │  File I/O │ Search │ Shell │ Git │ LSP │ Decisions │     │
-│  Team Mgmt │ Peer Comms │ Context Mesh │ Skills │ Verify │
+│  Team Mgmt │ Peer Comms │ Context │ Skills │ Verify │    │
+├──────────────────────────────────────────────────────────┤
+│  Social Layer                                            │
+│  Auth │ Organizations │ Snippets │ Community │ Feed      │
 ├──────────────────────────────────────────────────────────┤
 │  Intelligence                                            │
 │  Decision Graph │ Repo Intel │ Keeper Intelligence │     │
-│  Failure Memory │ Self-Introspection                     │
+│  Failure Memory │ Self-Introspection │ Kindred Bundles   │
 ├──────────────────────────────────────────────────────────┤
 │  Protocols: MCP Server │ MCP Client │ LSP Client         │
 ├──────────────────────────────────────────────────────────┤
@@ -245,8 +259,8 @@ This is a Phoenix LiveView app using Ecto with PostgreSQL.
 
 Loomkin is in active development. The core agent runtime, team orchestration, and web UI are stable and feature-rich.
 
-- **Done**: Agent teams, decision graph, context mesh, conversation agents, self-healing, orchestrator mode, structured handoffs, verification loops, speculative execution, task negotiation, cross-team communication, skill system, workspaces, keeper intelligence, permission dashboard, settings panel, visibility pipeline, channel adapters, signal bus
-- **Now**: Closing the loop (Epic 18) — keeper intelligence, workspace persistence, autonomous verification chains
+- **Done**: Agent teams, decision graph, context mesh, conversation agents, self-healing, orchestrator mode, structured handoffs, verification loops, speculative execution, task negotiation, adaptive team spawning, partial task results, cross-team communication, skill system (Jido-integrated), workspaces, keeper intelligence, permission dashboard, settings panel, visibility pipeline, channel adapters, signal bus, social platform (auth, snippets, community), organizations & kindred bundles, reflection agent, closing the loop (Epic 18), kindred & reflection (Epic 19)
+- **Now**: Stabilization, community onboarding, and contributor experience
 - **Next**: Vault primitive (generalized knowledge storage), long-horizon coding (multi-day autonomous sessions), platform API
 
 ---
@@ -266,7 +280,7 @@ Loomkin wouldn't exist without these projects:
 
 ## Contributing
 
-Loomkin is in active development. Contributions welcome. **2,600+ tests across 216 files. ~73K LOC application code. ~40K LOC tests.**
+Loomkin is in active development. Contributions welcome. **2,700+ tests across 218 files. ~77K LOC application code. ~40K LOC tests.**
 
 ```bash
 # Full setup (Docker, deps, database)

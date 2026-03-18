@@ -60,7 +60,7 @@ defmodule Loomkin.Tools.SubAgent do
 
     case run_sub_loop(messages, tool_defs, model, sub_context, 0) do
       {:ok, answer} -> {:ok, %{result: answer}}
-      {:error, reason} -> {:error, "Sub-agent failed: #{reason}"}
+      {:error, reason} -> {:error, "Sub-agent failed: #{inspect(reason)}"}
     end
   rescue
     e -> {:error, "Sub-agent error: #{Exception.message(e)}"}

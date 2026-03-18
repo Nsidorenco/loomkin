@@ -744,22 +744,6 @@ defmodule LoomkinWeb.AgentCardComponent do
   defp status_label(:permanently_failed), do: "Failed (max restarts)"
   defp status_label(_), do: "Unknown"
 
-  # Status pill background+text (kept for backward compat)
-  defp status_pill_class(:working), do: "bg-green-500/20 text-green-400"
-  defp status_pill_class(:idle), do: "bg-zinc-500/20 text-zinc-400"
-  defp status_pill_class(:paused), do: "bg-blue-500/20 text-blue-400"
-  defp status_pill_class(:error), do: "bg-red-500/20 text-red-400"
-  defp status_pill_class(:crashed), do: "bg-red-500/20 text-red-400"
-  defp status_pill_class(:approval_pending), do: "bg-amber-500/20 text-amber-400"
-  defp status_pill_class(:ask_user_pending), do: "bg-amber-500/20 text-amber-400"
-  defp status_pill_class(:awaiting_synthesis), do: "bg-indigo-500/20 text-indigo-400"
-  defp status_pill_class(:waiting_permission), do: "bg-yellow-500/20 text-yellow-400"
-  defp status_pill_class(:recovering), do: "bg-amber-500/20 text-amber-400"
-  defp status_pill_class(:permanently_failed), do: "bg-red-500/20 text-red-400"
-  defp status_pill_class(:suspended_healing), do: "bg-amber-500/20 text-amber-400"
-  defp status_pill_class(:complete), do: "bg-emerald-500/20 text-emerald-400"
-  defp status_pill_class(_), do: "bg-zinc-500/20 text-zinc-400"
-
   # Inline status text color — no background, just warm color
   defp status_pill_text_class(:working), do: "text-green-400"
   defp status_pill_text_class(:idle), do: "text-muted"

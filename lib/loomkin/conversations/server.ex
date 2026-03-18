@@ -10,7 +10,11 @@ defmodule Loomkin.Conversations.Server do
 
   use GenServer
 
+  require Logger
+
   alias Loomkin.Conversations.TurnStrategy
+  alias Loomkin.Repo
+  alias Loomkin.Schemas.Conversation, as: ConversationSchema
   alias Loomkin.Signals
 
   @default_inactivity_timeout_ms 60_000
@@ -132,6 +136,7 @@ defmodule Loomkin.Conversations.Server do
     }
 
     emit_started(state)
+    persist_conversation(state)
 
     {:ok, state}
   end
@@ -294,6 +299,7 @@ defmodule Loomkin.Conversations.Server do
   def handle_call({:attach_summary, summary}, _from, state) do
     state = %{state | summary: summary, status: :completed}
     emit_ended(state)
+    persist_conversation(state)
 
     # Server's work is done — reply and stop
     {:stop, :normal, :ok, state}
@@ -395,6 +401,7 @@ defmodule Loomkin.Conversations.Server do
     }
 
     emit_summarizing(state, reason)
+    persist_conversation(state)
 
     # Notify weaver (via PubSub) that summarization should begin
     notify_summarize(state)
@@ -548,4 +555,76 @@ defmodule Loomkin.Conversations.Server do
   defp inactivity_timeout_ms do
     Loomkin.Config.get(:conversations, :inactivity_timeout_ms) || @default_inactivity_timeout_ms
   end
+
+  defp persist_conversation(state) do
+    attrs = %{
+      id: state.id,
+      team_id: state.team_id,
+      topic: state.topic,
+      context: state.context,
+      spawned_by: state.spawned_by,
+      turn_strategy: to_string(state.turn_strategy || "round_robin"),
+      status: to_string(state.status),
+      end_reason: if(state.end_reason, do: to_string(state.end_reason)),
+      current_round: state.current_round,
+      max_rounds: state.max_rounds,
+      tokens_used: state.tokens_used,
+      max_tokens: state.max_tokens,
+      participants: serialize_participants(state.participants),
+      history: serialize_history(state.history),
+      summary: state.summary,
+      started_at: state.started_at,
+      ended_at: state.ended_at
+    }
+
+    %ConversationSchema{id: state.id}
+    |> ConversationSchema.changeset(attrs)
+    |> Repo.insert(
+      on_conflict: {:replace_all_except, [:id, :inserted_at]},
+      conflict_target: :id
+    )
+  rescue
+    e ->
+      Logger.warning(
+        "[Conversation.Server] persist failed for #{state.id}: #{Exception.message(e)}"
+      )
+
+      :ok
+  end
+
+  defp serialize_participants(participants) do
+    Enum.map(participants, fn
+      %{name: name} = p ->
+        %{
+          "name" => name,
+          "perspective" => Map.get(p, :perspective, ""),
+          "expertise" => Map.get(p, :expertise, "")
+        }
+
+      name when is_binary(name) ->
+        %{"name" => name}
+
+      other ->
+        %{"name" => inspect(other)}
+    end)
+  end
+
+  defp serialize_history(history) do
+    history
+    |> Enum.reverse()
+    |> Enum.map(fn entry ->
+      %{
+        "speaker" => entry.speaker,
+        "content" => entry.content,
+        "round" => entry.round,
+        "type" => serialize_type(entry.type),
+        "timestamp" => DateTime.to_iso8601(entry.timestamp)
+      }
+    end)
+  end
+
+  defp serialize_type(:speech), do: "speech"
+  defp serialize_type(:yield), do: "yield"
+  defp serialize_type({:reaction, type}), do: "reaction:#{type}"
+  defp serialize_type(other), do: to_string(other)
 end

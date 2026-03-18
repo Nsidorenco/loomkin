@@ -108,39 +108,49 @@ defmodule Loomkin.Tools.PeerCompleteTask do
         {:error, "Task not found: #{task_id}"}
 
       {:ok, task} when task.team_id != team_id ->
-        {:error, "Task #{task_id} belongs to a different team"}
+        # Allow cross-team task completion when a parent team creates tasks
+        # for child team agents. Log it but don't block.
+        Logger.info(
+          "[PeerCompleteTask] Cross-team completion: agent team=#{team_id}, task team=#{task.team_id}, task=#{task_id}"
+        )
+
+        do_complete_task(task_id, completion_attrs, file_warnings)
 
       {:ok, _task} ->
-        case Tasks.complete_task(task_id, completion_attrs) do
-          {:ok, task} ->
-            artifact_count =
-              length(completion_attrs.actions_taken) +
-                length(completion_attrs.discoveries) +
-                length(completion_attrs.files_changed)
+        do_complete_task(task_id, completion_attrs, file_warnings)
+    end
+  end
 
-            warning_section =
-              if file_warnings != [] do
-                "\n  ⚠ File verification warnings: #{Enum.join(file_warnings, ", ")}"
-              else
-                ""
-              end
+  defp do_complete_task(task_id, completion_attrs, file_warnings) do
+    case Tasks.complete_task(task_id, completion_attrs) do
+      {:ok, task} ->
+        artifact_count =
+          length(completion_attrs.actions_taken) +
+            length(completion_attrs.discoveries) +
+            length(completion_attrs.files_changed)
 
-            verified_count = length(completion_attrs.files_changed) - length(file_warnings)
+        warning_section =
+          if file_warnings != [] do
+            "\n  ⚠ File verification warnings: #{Enum.join(file_warnings, ", ")}"
+          else
+            ""
+          end
 
-            summary = """
-            Task completed:
-              ID: #{task.id}
-              Title: #{task.title}
-              Status: #{task.status}
-              Artifacts: #{artifact_count} (#{length(completion_attrs.actions_taken)} actions, #{length(completion_attrs.discoveries)} discoveries, #{length(completion_attrs.files_changed)} files)
-              Files verified: #{verified_count}/#{length(completion_attrs.files_changed)}#{warning_section}
-            """
+        verified_count = length(completion_attrs.files_changed) - length(file_warnings)
 
-            {:ok, %{result: String.trim(summary), task_id: task.id}}
+        summary = """
+        Task completed:
+          ID: #{task.id}
+          Title: #{task.title}
+          Status: #{task.status}
+          Artifacts: #{artifact_count} (#{length(completion_attrs.actions_taken)} actions, #{length(completion_attrs.discoveries)} discoveries, #{length(completion_attrs.files_changed)} files)
+          Files verified: #{verified_count}/#{length(completion_attrs.files_changed)}#{warning_section}
+        """
 
-          {:error, reason} ->
-            {:error, "Failed to complete task: #{inspect(reason)}"}
-        end
+        {:ok, %{result: String.trim(summary), task_id: task.id}}
+
+      {:error, reason} ->
+        {:error, "Failed to complete task: #{inspect(reason)}"}
     end
   end
 end

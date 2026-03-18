@@ -31,10 +31,15 @@ defmodule Loomkin.Teams.ModelRouter do
   # Legacy tier names kept for backward-compatible hint resolution.
   # These are resolved dynamically via the user's configured default model.
   defp legacy_tier_models do
-    default = Loomkin.Config.get(:model, :default)
+    default = Loomkin.Config.get(:model, :default) || fallback_model()
+
+    fast =
+      Loomkin.Config.get(:model, :fast) ||
+        Application.get_env(:loomkin, :weak_model) ||
+        default
 
     %{
-      grunt: Loomkin.Config.get(:model, :fast) || default,
+      grunt: fast,
       standard: default,
       expert: default,
       architect: default
@@ -42,7 +47,8 @@ defmodule Loomkin.Teams.ModelRouter do
   end
 
   defp fallback_model do
-    Loomkin.Config.get(:model, :default)
+    Loomkin.Config.get(:model, :default) ||
+      Application.get_env(:loomkin, :default_model)
   end
 
   # ── ETS initialization ───────────────────────────────────────────────

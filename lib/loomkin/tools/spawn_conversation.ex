@@ -210,7 +210,10 @@ defmodule Loomkin.Tools.SpawnConversation do
   defp do_start_conversation(config, context, team_id) do
     session_id = param(context, :session_id)
     spawned_by = param(context, :agent_name) || "unknown"
-    model = param(context, :model) || fast_model(session_id)
+
+    # Conversations are lightweight — prefer the session's fast model (user-selected
+    # via the UI), falling back to the agent's own model from context.
+    model = resolve_conversation_model(session_id, context)
 
     conversation_id = Ecto.UUID.generate()
     facilitator_name = Map.get(config, :facilitator)
@@ -341,15 +344,23 @@ defmodule Loomkin.Tools.SpawnConversation do
     end
   end
 
-  defp fast_model(session_id) when is_binary(session_id) do
+  # Resolve the model for conversation agents. Priority:
+  # 1. Session's fast model (user-selected via UI dropdown)
+  # 2. Session's primary model (user-selected via UI dropdown)
+  # 3. Agent's own model from execution context
+  defp resolve_conversation_model(session_id, context) when is_binary(session_id) do
     case Loomkin.Session.Manager.find_session(session_id) do
-      {:ok, pid} -> Loomkin.Session.get_fast_model(pid)
-      :error -> Loomkin.Config.get(:model, :fast) || Loomkin.Config.get(:model, :default)
+      {:ok, pid} ->
+        fast = Loomkin.Session.get_fast_model(pid)
+        fast || Loomkin.Session.get_model(pid) || param(context, :model)
+
+      :error ->
+        param(context, :model)
     end
   end
 
-  defp fast_model(_session_id) do
-    Loomkin.Config.get(:model, :fast) || Loomkin.Config.get(:model, :default)
+  defp resolve_conversation_model(_session_id, context) do
+    param(context, :model)
   end
 
   defp config_max_personas do

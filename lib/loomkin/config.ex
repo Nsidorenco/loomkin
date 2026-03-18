@@ -12,13 +12,14 @@ defmodule Loomkin.Config do
 
   @defaults %{
     model: %{
-      default: "zai:glm-5",
-      # Cheaper/faster model for lightweight tasks (conversations, grunt work).
-      # Falls back to :default when nil.
-      fast: "zai:glm-4.5",
+      # Initial default model — overridden by user selection in the UI.
+      # Can also be set via .loomkin.toml: [model] default = "provider:model-name"
+      default: nil,
+      # Fast model for lightweight tasks (conversations, sub-agents).
+      # Overridden by user selection in the UI fast-model dropdown.
+      # nil = inherit from :default.
+      fast: nil,
       # Secondary model for editor tasks — nil means "use the primary model".
-      # Only used when an agent determines a lesser model is acceptable.
-      # Users can set this in .loomkin.toml: [model] editor = "zai:glm-4.5"
       editor: nil
     },
     repo: %{

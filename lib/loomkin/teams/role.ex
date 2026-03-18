@@ -134,10 +134,17 @@ defmodule Loomkin.Teams.Role do
   # Legacy tier map — resolved dynamically from user config.
   # Kept only for backward-compatible `model_for_tier/1` calls.
   defp legacy_tier_models do
-    default = Loomkin.Config.get(:model, :default)
+    default =
+      Loomkin.Config.get(:model, :default) ||
+        Application.get_env(:loomkin, :default_model)
+
+    fast =
+      Loomkin.Config.get(:model, :fast) ||
+        Application.get_env(:loomkin, :weak_model) ||
+        default
 
     %{
-      grunt: Loomkin.Config.get(:model, :fast) || default,
+      grunt: fast,
       standard: default,
       expert: default,
       architect: default

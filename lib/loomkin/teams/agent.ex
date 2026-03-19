@@ -1673,7 +1673,17 @@ defmodule Loomkin.Teams.Agent do
   end
 
   def handle_info(%Jido.Signal{type: "team.task.completed"} = sig, state) do
-    handle_info({:sub_team_completed, sig.data[:sub_team_id] || sig.data.task_id}, state)
+    signal_team_id = sig.data[:team_id]
+
+    is_from_child_team =
+      signal_team_id != nil and signal_team_id != state.team_id and
+        signal_team_id in Loomkin.Teams.Manager.get_child_teams(state.team_id)
+
+    if is_from_child_team and state.role in [:lead, :concierge] do
+      handle_info({:child_team_task_completed, sig.data}, state)
+    else
+      handle_info({:sub_team_completed, sig.data[:sub_team_id] || sig.data.task_id}, state)
+    end
   end
 
   def handle_info(%Jido.Signal{type: "team.task.started"} = sig, state) do
@@ -2058,6 +2068,36 @@ defmodule Loomkin.Teams.Agent do
     }
 
     {:noreply, maybe_wake_idle(%{state | messages: state.messages ++ [msg]})}
+  end
+
+  @impl true
+  def handle_info({:child_team_task_completed, signal_data}, state) do
+    task_id = signal_data[:task_id]
+    owner = signal_data[:owner] || "unknown"
+    child_team_id = signal_data[:team_id] || "unknown"
+
+    # Fetch the full task from DB to get structured result fields
+    structured_result =
+      try do
+        case Loomkin.Teams.Tasks.get_task(task_id) do
+          {:ok, task} ->
+            format_child_task_result(task, owner, child_team_id)
+
+          {:error, _} ->
+            result = signal_data[:result] || ""
+
+            "[Sub-team result] Agent #{owner} in child team #{child_team_id} completed task #{task_id}.\nResult: #{result}"
+        end
+      rescue
+        e ->
+          Logger.warning("[Kin:agent] Failed to fetch child team task #{task_id}: #{inspect(e)}")
+
+          "[Sub-team result] Agent #{owner} in child team #{child_team_id} completed task #{task_id}."
+      end
+
+    msg = %{role: :user, content: structured_result}
+    state = %{state | messages: state.messages ++ [msg]}
+    {:noreply, maybe_wake_idle(state)}
   end
 
   @impl true
@@ -4050,7 +4090,51 @@ defmodule Loomkin.Teams.Agent do
       get_in(sig.data, [:team_id]) ||
         get_in(sig, [Access.key(:extensions, %{}), "loomkin", "team_id"])
 
-    signal_team_id == nil or signal_team_id == state.team_id
+    signal_team_id == nil or signal_team_id == state.team_id or
+      child_team_signal_allowed?(sig.type, signal_team_id, state)
+  end
+
+  # Allow specific signal types from child teams to reach parent team agents.
+  # Only lead/concierge roles receive these to avoid noise for worker agents.
+  @child_team_signal_types ~w[
+    team.task.completed
+    team.task.failed
+    team.task.blocked
+    team.task.partially_complete
+  ]
+
+  defp child_team_signal_allowed?(type, signal_team_id, state)
+       when type in @child_team_signal_types and not is_nil(signal_team_id) do
+    state.role in [:lead, :concierge] and
+      signal_team_id in Loomkin.Teams.Manager.get_child_teams(state.team_id)
+  end
+
+  defp child_team_signal_allowed?(_type, _signal_team_id, _state), do: false
+
+  defp format_child_task_result(task, owner, child_team_id) do
+    header =
+      "[Sub-team result] Agent #{owner} in child team #{child_team_id} completed task: #{task.title}"
+
+    sections =
+      [
+        if(task.result && task.result != "", do: "\n**Result:** #{task.result}"),
+        format_list_section("Actions taken", task.actions_taken),
+        format_list_section("Discoveries", task.discoveries),
+        format_list_section("Files changed", task.files_changed),
+        format_list_section("Decisions made", task.decisions_made),
+        format_list_section("Open questions", task.open_questions)
+      ]
+      |> Enum.reject(&is_nil/1)
+
+    [header | sections] |> Enum.join("")
+  end
+
+  defp format_list_section(_label, nil), do: nil
+  defp format_list_section(_label, []), do: nil
+
+  defp format_list_section(label, items) when is_list(items) do
+    formatted = Enum.map_join(items, "\n  - ", & &1)
+    "\n**#{label}:**\n  - #{formatted}"
   end
 
   defp broadcast_team(state, {:agent_status, agent_name, status, metadata}) do

@@ -7,6 +7,8 @@ defmodule Loomkin.Teams.AgentState do
 
   alias Loomkin.Teams.Agent
 
+  @type t :: %__MODULE__{}
+
   defstruct [
     # Identity
     :team_id,
@@ -47,7 +49,11 @@ defmodule Loomkin.Teams.AgentState do
     spawned_child_teams: [],
     auto_approve_spawns: false,
     # Timer ref — will be nil on restore; caller re-establishes if needed
-    wake_ref: nil
+    wake_ref: nil,
+    # Scope detection
+    scope_tier: nil,
+    files_touched: MapSet.new(),
+    task_cost_usd: 0.0
   ]
 
   @essential_fields [
@@ -80,14 +86,17 @@ defmodule Loomkin.Teams.AgentState do
     :pending_ask_user,
     :spawned_child_teams,
     :auto_approve_spawns,
-    :wake_ref
+    :wake_ref,
+    :scope_tier,
+    :files_touched,
+    :task_cost_usd
   ]
 
   @doc """
   Extracts the essential (checkpoint-worthy) fields from a full Agent state,
   dropping transient process references like `loop_task` and `subscription_ids`.
   """
-  @spec extract_essential_state(%Agent{}) :: %__MODULE__{}
+  @spec extract_essential_state(Agent.t()) :: t()
   def extract_essential_state(%Agent{} = agent) do
     fields = Map.take(agent, @essential_fields)
     struct!(__MODULE__, Map.to_list(fields))
@@ -157,7 +166,10 @@ defmodule Loomkin.Teams.AgentState do
     :last_asked_at,
     :pending_ask_user,
     :spawned_child_teams,
-    :auto_approve_spawns
+    :auto_approve_spawns,
+    :scope_tier,
+    :files_touched,
+    :task_cost_usd
   ]
 
   @doc """
@@ -166,7 +178,7 @@ defmodule Loomkin.Teams.AgentState do
   name, role, etc.) are left as-is from the fresh init — only conversation,
   work, and queue state are restored.
   """
-  @spec restore_into_agent(%Agent{}, %__MODULE__{}) :: %Agent{}
+  @spec restore_into_agent(Agent.t(), t()) :: Agent.t()
   def restore_into_agent(%Agent{} = agent, %__MODULE__{} = essential) do
     restored = Map.take(essential, @restorable_fields)
     Map.merge(agent, restored)

@@ -13,14 +13,27 @@ defmodule Loomkin.Checkpoints do
     |> Repo.insert()
   end
 
-  @doc "Get the latest checkpoint for a given team and agent."
-  def latest_checkpoint(team_id, agent_name) do
-    from(c in AgentCheckpoint,
-      where: c.team_id == ^team_id and c.agent_name == ^agent_name,
-      order_by: [desc: c.inserted_at],
-      limit: 1
-    )
-    |> Repo.one()
+  @doc """
+  Get the latest checkpoint for a given team and agent.
+
+  Accepts an optional `session_id` to scope the lookup — prevents cross-session
+  state restoration when teams are reused.
+  """
+  def latest_checkpoint(team_id, agent_name, opts \\ []) do
+    query =
+      from(c in AgentCheckpoint,
+        where: c.team_id == ^team_id and c.agent_name == ^agent_name,
+        order_by: [desc: c.inserted_at],
+        limit: 1
+      )
+
+    query =
+      case Keyword.get(opts, :session_id) do
+        nil -> query
+        session_id -> from(c in query, where: c.session_id == ^session_id)
+      end
+
+    Repo.one(query)
   end
 
   @doc "List all checkpoints for a team."
@@ -30,6 +43,16 @@ defmodule Loomkin.Checkpoints do
       order_by: [desc: c.inserted_at]
     )
     |> Repo.all()
+  end
+
+  @doc "Delete all checkpoints for a specific agent. Used on successful task completion."
+  def delete_agent_checkpoints(team_id, agent_name) do
+    from(c in AgentCheckpoint,
+      where: c.team_id == ^team_id and c.agent_name == ^agent_name
+    )
+    |> Repo.delete_all()
+
+    :ok
   end
 
   @doc "Delete old checkpoints for a team, keeping the N most recent per agent."

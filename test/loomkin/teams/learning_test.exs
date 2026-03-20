@@ -235,30 +235,30 @@ defmodule Loomkin.Teams.LearningTest do
   describe "avg_cost_by_scope/1" do
     test "returns average cost for tasks of a given scope tier" do
       for cost <- [0.10, 0.20, 0.30, 0.40, 0.50] do
-        insert_metric(%{scope_tier: "scoped", cost_usd: cost})
+        insert_metric(%{scope_tier: "session", cost_usd: cost})
       end
 
-      avg = Learning.avg_cost_by_scope(:scoped)
+      avg = Learning.avg_cost_by_scope(:session)
       assert_in_delta avg, 0.30, 0.001
     end
 
     test "accepts string tier" do
-      insert_metric(%{scope_tier: "surgical", cost_usd: 0.05})
-      insert_metric(%{scope_tier: "surgical", cost_usd: 0.15})
+      insert_metric(%{scope_tier: "quick", cost_usd: 0.05})
+      insert_metric(%{scope_tier: "quick", cost_usd: 0.15})
 
-      avg = Learning.avg_cost_by_scope("surgical")
+      avg = Learning.avg_cost_by_scope("quick")
       assert_in_delta avg, 0.10, 0.001
     end
 
     test "returns nil when no data exists for tier" do
-      assert Learning.avg_cost_by_scope(:transformative) == nil
+      assert Learning.avg_cost_by_scope(:campaign) == nil
     end
 
     test "ignores records without scope_tier" do
       insert_metric(%{cost_usd: 0.50})
-      insert_metric(%{scope_tier: "broad", cost_usd: 0.20})
+      insert_metric(%{scope_tier: "campaign", cost_usd: 0.20})
 
-      assert Learning.avg_cost_by_scope(:broad) == 0.20
+      assert Learning.avg_cost_by_scope(:campaign) == 0.20
     end
   end
 
@@ -267,37 +267,37 @@ defmodule Loomkin.Teams.LearningTest do
   describe "recommend_tier/1" do
     test "returns :learned with avg cost when 5+ records exist" do
       for _ <- 1..6 do
-        insert_metric(%{scope_tier: "surgical", cost_usd: 0.04})
+        insert_metric(%{scope_tier: "quick", cost_usd: 0.04})
       end
 
-      assert {:learned, "surgical", avg_cost} =
+      assert {:learned, "quick", avg_cost} =
                Learning.recommend_tier(%{task_description: "fix typo", file_matches: 1})
 
       assert_in_delta avg_cost, 0.04, 0.001
     end
 
     test "returns :default when insufficient data" do
-      insert_metric(%{scope_tier: "broad", cost_usd: 0.50})
+      insert_metric(%{scope_tier: "campaign", cost_usd: 0.50})
 
-      assert {:default, "broad"} =
-               Learning.recommend_tier(%{task_description: "refactor module", file_matches: 15})
+      assert {:default, "campaign"} =
+               Learning.recommend_tier(%{task_description: "refactor module", file_matches: 20})
     end
 
     test "infers correct tiers from file_matches" do
-      # surgical: <= 2 files
-      assert {:default, "surgical"} =
+      # quick: <= 3 files
+      assert {:default, "quick"} =
                Learning.recommend_tier(%{task_description: "x", file_matches: 1})
 
-      # scoped: 3-8 files
-      assert {:default, "scoped"} =
+      # session: 4-15 files
+      assert {:default, "session"} =
                Learning.recommend_tier(%{task_description: "x", file_matches: 5})
 
-      # broad: 9-20 files
-      assert {:default, "broad"} =
-               Learning.recommend_tier(%{task_description: "x", file_matches: 12})
+      # campaign: > 15 files
+      assert {:default, "campaign"} =
+               Learning.recommend_tier(%{task_description: "x", file_matches: 16})
 
-      # transformative: > 20 files
-      assert {:default, "transformative"} =
+      # campaign: large
+      assert {:default, "campaign"} =
                Learning.recommend_tier(%{task_description: "x", file_matches: 25})
     end
 
@@ -308,7 +308,7 @@ defmodule Loomkin.Teams.LearningTest do
       end
 
       # Should return :default since none of the old records have scope_tier
-      assert {:default, "scoped"} =
+      assert {:default, "session"} =
                Learning.recommend_tier(%{task_description: "update helpers", file_matches: 4})
     end
   end
@@ -324,11 +324,11 @@ defmodule Loomkin.Teams.LearningTest do
                  model: "anthropic:claude-sonnet-4-6",
                  task_type: "code_edit",
                  success: true,
-                 scope_tier: "scoped",
+                 scope_tier: "session",
                  files_touched: 5
                })
 
-      assert metric.scope_tier == "scoped"
+      assert metric.scope_tier == "session"
       assert metric.files_touched == 5
     end
 

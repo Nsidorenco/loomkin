@@ -178,8 +178,8 @@ defmodule Loomkin.Teams.AgentScopeGateTest do
       GenServer.cast(pid, {:assign_task, %{id: "t1", title: "fix the bug"}})
       _ = :sys.get_state(pid)
 
-      # Set cost above :quick envelope of $0.50
-      :sys.replace_state(pid, fn state -> %{state | cost_usd: 0.75} end)
+      # Set per-task cost above :quick envelope of $0.50
+      :sys.replace_state(pid, fn state -> %{state | task_cost_usd: 0.75} end)
 
       result = GenServer.call(pid, {:checkpoint, %{}})
       assert {:pause, {:scope_gate, details}} = result

@@ -26,6 +26,8 @@ defmodule Loomkin.Teams.Agent do
   alias Loomkin.Teams.Role
   alias Loomkin.Teams.ScopeDetector
 
+  @type t :: %__MODULE__{}
+
   defstruct [
     :team_id,
     :session_id,
@@ -61,7 +63,8 @@ defmodule Loomkin.Teams.Agent do
     auto_approve_spawns: false,
     wake_ref: nil,
     scope_tier: nil,
-    files_touched: MapSet.new()
+    files_touched: MapSet.new(),
+    task_cost_usd: 0.0
   ]
 
   # --- Public API ---
@@ -1010,7 +1013,7 @@ defmodule Loomkin.Teams.Agent do
     {:ok, tier, _estimate} =
       ScopeDetector.detect_tier(%{task_description: description})
 
-    state = %{state | scope_tier: tier, files_touched: MapSet.new()}
+    state = %{state | scope_tier: tier, files_touched: MapSet.new(), task_cost_usd: 0.0}
 
     # Cache the task so the rebalancer can track what this agent is working on
     if task[:id] do
@@ -3595,7 +3598,7 @@ defmodule Loomkin.Teams.Agent do
 
   defp check_scope_envelope(state) do
     file_count = MapSet.size(state.files_touched)
-    ScopeDetector.exceeded?(state.scope_tier, %{files: file_count, cost: state.cost_usd})
+    ScopeDetector.exceeded?(state.scope_tier, %{files: file_count, cost: state.task_cost_usd})
   end
 
   defp broadcast_scope_gate(state, tier, trigger, details) do
@@ -3919,6 +3922,7 @@ defmodule Loomkin.Teams.Agent do
     %{
       state
       | cost_usd: state.cost_usd + cost,
+        task_cost_usd: state.task_cost_usd + cost,
         tokens_used: state.tokens_used + total_tokens
     }
   end
@@ -3961,9 +3965,9 @@ defmodule Loomkin.Teams.Agent do
         save_checkpoint_async(state, :paused)
       end
 
-      # Clean up old checkpoints on successful completion
+      # Delete all checkpoints on successful completion to prevent stale resurrection
       if new_status == :idle and old_status in [:working, :thinking] do
-        cleanup_checkpoints_async(state)
+        delete_all_checkpoints_async(state)
       end
 
       state
@@ -4198,7 +4202,9 @@ defmodule Loomkin.Teams.Agent do
   @stale_checkpoint_hours 24
 
   defp maybe_restore_from_checkpoint(state) do
-    case Checkpoints.latest_checkpoint(state.team_id, to_string(state.name)) do
+    case Checkpoints.latest_checkpoint(state.team_id, to_string(state.name),
+           session_id: state.session_id
+         ) do
       nil ->
         state
 
@@ -4327,11 +4333,12 @@ defmodule Loomkin.Teams.Agent do
     }
   end
 
-  defp cleanup_checkpoints_async(state) do
+  defp delete_all_checkpoints_async(state) do
     team_id = state.team_id
+    agent_name = to_string(state.name)
 
     Task.Supervisor.start_child(Loomkin.Teams.TaskSupervisor, fn ->
-      Checkpoints.delete_old_checkpoints(team_id, keep: 3)
+      Checkpoints.delete_agent_checkpoints(team_id, agent_name)
     end)
   end
 end

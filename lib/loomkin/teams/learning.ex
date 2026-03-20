@@ -256,10 +256,9 @@ defmodule Loomkin.Teams.Learning do
 
   defp infer_tier(file_matches) when is_integer(file_matches) do
     cond do
-      file_matches <= 2 -> "surgical"
-      file_matches <= 8 -> "scoped"
-      file_matches <= 20 -> "broad"
-      true -> "transformative"
+      file_matches <= 3 -> "quick"
+      file_matches <= 15 -> "session"
+      true -> "campaign"
     end
   end
 end

@@ -198,7 +198,7 @@ defmodule Loomkin.Providers.OpenAIOAuth do
     |> Req.Request.put_header("authorization", "Bearer #{oauth_token}")
     |> Req.Request.put_header("chatgpt-account-id", account_id || "")
     |> Req.Request.put_header("openai-beta", "responses=experimental")
-    |> Req.Request.put_header("originator", "codex_cli_rs")
+    |> Req.Request.put_header("originator", "opencode")
     |> Req.Request.put_header("accept", "text/event-stream")
     |> Req.Request.merge_options([model: get_api_model_id(model)] ++ req_opts)
     |> Req.Request.put_private(:req_llm_model, model)
@@ -286,7 +286,7 @@ defmodule Loomkin.Providers.OpenAIOAuth do
         {"Authorization", "Bearer #{oauth_token}"},
         {"chatgpt-account-id", account_id || ""},
         {"OpenAI-Beta", "responses=experimental"},
-        {"originator", "codex_cli_rs"}
+        {"originator", "opencode"}
       ]
 
       body = build_stream_body(model, context, translated_opts)
